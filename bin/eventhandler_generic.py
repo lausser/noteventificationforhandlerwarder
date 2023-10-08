@@ -15,8 +15,8 @@ import traceback
 if __name__ == '__main__':
     VERSION = "1.0"
 
-    if not os.environ["OMD_ROOT"].startswith("/omd/sites/"):
-        result["error"] = "This script must be run in an OMD environment"
+    if not os.environ.get("OMD_ROOT", "").startswith("/omd/sites/") and os.environ.get("OMD_SITE", "") != "my_devel_site"):
+        print("This script must be run in an OMD environment")
         sys.exit(1)
 
     parser = argparse.ArgumentParser(
