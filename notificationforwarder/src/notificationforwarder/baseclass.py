@@ -113,8 +113,6 @@ class NotificationForwarder(object):
         except Exception as e:
             logger.critical("formatter error: "+str(e))
             formatted_event = None
-        print("forward raw {}".format(raw_event))
-        print("forward for {}".format(formatted_event))
 
         self.forward_formatted(formatted_event)
 
@@ -129,8 +127,10 @@ class NotificationForwarder(object):
             logger.critical(e)
         self.initdb()
         if success:
+            logger.info("forwarded {}".format(formatted_event.summary))
             self.flush()
         else:
+            logger.info("forward failed, spooled {}".format(formatted_event.summary))
             self.spool(formatted_event)
 
     def formatter(self):
@@ -163,6 +163,7 @@ class NotificationForwarder(object):
         return True
 
     def initdb(self):
+        db_file = os.environ["OMD_ROOT"] + '/var/tmp/' + self.name + '-notifications.db'
         self.table_name = "events_"+self.name
         sql_create = """CREATE TABLE IF NOT EXISTS """+self.table_name+""" (
                 id INTEGER PRIMARY KEY,
@@ -171,12 +172,12 @@ class NotificationForwarder(object):
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             )"""
         try:
-            conn = sqlite3.connect(os.environ["OMD_ROOT"] + '/var/tmp/' + self.name + '-notifications.db')
+            conn = sqlite3.connect(db_file)
             curr = conn.cursor()
             curr.execute(sql_create)
             conn.close()
         except Exception as e:
-            logger.info("database init"+str(e))
+            logger.info("error initializing database {}: {}".format(db_file, str(e)))
 
     def spool(self, event):
         sql_insert = "INSERT INTO "+self.table_name+"(payload, summary) VALUES (?, ?)"
