@@ -18,6 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "coshsh",
+    "jinja2",
 ]
 
 [project.optional-dependencies]
