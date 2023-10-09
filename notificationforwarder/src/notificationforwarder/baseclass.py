@@ -41,6 +41,7 @@ class NotificationForwarder(object):
         self.queued_events = []
         self.max_queue_length = 10
         self.sleep_after_flush = 0
+        self.baseclass_logs_summary = True
         for opt in opts:
             setattr(self, opt, opts[opt])
 
@@ -127,10 +128,12 @@ class NotificationForwarder(object):
             logger.critical(e)
         self.initdb()
         if success:
-            logger.info("forwarded {}".format(formatted_event.summary))
+            if self.baseclass_logs_summary:
+                logger.info("forwarded {}".format(formatted_event.summary))
             self.flush()
         else:
-            logger.info("forward failed, spooled {}".format(formatted_event.summary))
+            if self.baseclass_logs_summary:
+                logger.info("forward failed, spooled {}".format(formatted_event.summary))
             self.spool(formatted_event)
 
     def formatter(self):
@@ -152,9 +155,6 @@ class NotificationForwarder(object):
     def format_event(self, raw_event):
         instance = self.formatter()
         return instance.format_event(raw_event)
-
-    def log_submit(self, event):
-        pass
 
     def connect(self):
         return True
@@ -268,6 +268,12 @@ class NotificationForwarder(object):
                     logger.critical(e)
             else:
                 logger.debug("missed the flush lock")
+
+    def no_more_logging(self):
+        # this is called in the forwarder. If the forwarder already wrote
+        # it's own logs and writing the summary by the baseclass is not
+        # desired.
+        self.baseclass_logs_summary = False
 
 
 

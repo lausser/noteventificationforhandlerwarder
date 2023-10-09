@@ -84,8 +84,25 @@ class NofEvhTest(TestCase):
         example = notificationforwarder.new("example", None, True, True,  reveiveropts)
         example.forward(eventopts)
         log = open(self.get_logfile(example)).read()
-        self.assertTrue("'description': 'this is an example description'" in log)
         self.assertTrue("INFO - dau submits" in log)
-        print("LOG "+log)
-        raise
+        self.assertTrue("'description': 'this is an example description'" in log)
+        # this is the global log, written by the baseclass
+        self.assertTrue("INFO - forwarded this is an example" in log)
+
+        self.setUp() # delete logfile
+        # we need to reinitialize, because the logger has the (deleted) file
+        # still open and further writes would end up in nirvana.
+        example = notificationforwarder.new("example", None, True, True,  reveiveropts)
+        eventopts = {
+            "description": "this is an example description again",
+        }
+        example.no_more_logging()
+        example.forward(eventopts)
+        log = open(self.get_logfile(example)).read()
+        # the formatter's logs are still there
+        self.assertTrue("INFO - dau submits" in log)
+        self.assertTrue("'description': 'this is an example description again'" in log)
+        # but not the baseclasse's log
+        self.assertFalse("INFO - forwarded this is an example" in log)
+
 
