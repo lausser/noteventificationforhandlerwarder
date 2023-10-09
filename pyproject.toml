@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "coshsh"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noteventificationforhandlerwarder_lausser"
+version = "0.0.1"
+authors = [
+  { name="Gerhard Lausser", email="lausser@yahoo.com" },
+]
+description = "A framework for notification scripts and event handlers for OMD"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/lausser/noteventificationforhandlerwarder"
+"Bug Tracker" = "https://github.com/lausser/noteventificationforhandlerwarder/issues"
