@@ -2,19 +2,13 @@
 requires = ["flit_core >=3.2,<4", "coshsh"]
 build-backend = "flit_core.buildapi"
 
-[tool.flit.sdist]
-include = [
-    "pyproject.toml",
-    "src/noificationforwarder/**"
-]
-
 [project]
-name = "noteventificationforhandlerwarder"
+name = "omdnotificationforwarder"
 version = "0.0.1"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]
-description = "A framework for notification scripts and event handlers for OMD"
+description = "A framework for notification scripts for OMD"
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -25,9 +19,27 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
-    "unittest"
+    "unittest",
+    "pytest >= 2.7.3",
+    "pytest-cov",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/lausser/noteventificationforhandlerwarder"
 "Bug Tracker" = "https://github.com/lausser/noteventificationforhandlerwarder/issues"
+
+[tool.flit.module]
+name = "notificationforwarder"
+
+[tool.pytest.ini_options]
+addopts = [
+    "-ra",
+    "-q",
+    "--import-mode=importlib",
+]
+pythonpath = [
+    "src/"
+]
+testpaths = [
+    "tests",
+]
