@@ -16,6 +16,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+    "coshsh",
+]
 
 [project.optional-dependencies]
 test = [
@@ -31,12 +34,10 @@ test = [
 [tool.flit.module]
 name = "notificationforwarder"
 
+[tool.flit.metadata.requires]
+
 [tool.pytest.ini_options]
-addopts = [
-    "-ra",
-    "-q",
-    "--import-mode=importlib",
-]
+addopts = "-ra -q --import-mode=importlib"
 pythonpath = [
     "src/"
 ]
