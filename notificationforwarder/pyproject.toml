@@ -1,9 +1,15 @@
 [build-system]
-requires = ["setuptools>=61.0", "coshsh"]
-build-backend = "setuptools.build_meta"
+requires = ["flit_core >=3.2,<4", "coshsh"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.sdist]
+include = [
+    "pyproject.toml",
+    "src/noificationforwarder/**"
+]
 
 [project]
-name = "noteventificationforhandlerwarder_lausser"
+name = "noteventificationforhandlerwarder"
 version = "0.0.1"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
@@ -15,6 +21,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+test = [
+    "unittest"
 ]
 
 [project.urls]
