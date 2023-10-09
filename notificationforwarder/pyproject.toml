@@ -34,8 +34,6 @@ test = [
 [tool.flit.module]
 name = "notificationforwarder"
 
-[tool.flit.metadata.requires]
-
 [tool.pytest.ini_options]
 addopts = "-ra -q --import-mode=importlib"
 pythonpath = [
