@@ -1,6 +1,19 @@
 [build-system]
-requires = ["flit_core >=3.2,<4", "coshsh"]
-build-backend = "flit_core.buildapi"
+requires = ["hatchling", "coshsh"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "src/**/*.py",
+    "/tests",
+]
+exclude = [
+    "__pacache__/",
+    "**/.pyc",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/notificationforwarder"]
 
 [project]
 name = "omdnotificationforwarder"
@@ -31,9 +44,6 @@ test = [
 [project.urls]
 "Homepage" = "https://github.com/lausser/noteventificationforhandlerwarder"
 "Bug Tracker" = "https://github.com/lausser/noteventificationforhandlerwarder/issues"
-
-[tool.flit.module]
-name = "notificationforwarder"
 
 [tool.pytest.ini_options]
 addopts = "-ra -q --import-mode=importlib"
