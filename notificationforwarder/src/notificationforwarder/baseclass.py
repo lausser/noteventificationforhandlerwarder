@@ -40,7 +40,6 @@ def new(target_name, tag, verbose, debug, receiveropts):
         logger_name = "notificationforwarder_"+target_name+"_"+tag
     else:
         logger_name = "notificationforwarder_"+target_name
-    print("der scheiss loggername "+logger_name)
 
     setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s")
     logger = logging.getLogger(logger_name)
@@ -50,15 +49,8 @@ def new(target_name, tag, verbose, debug, receiveropts):
         else:
             module_name = target_name
             class_name = target_name.capitalize()
-        import sys
-        for i in sys.path:
-            print("->"+i)
         forwarder_module = import_module('notificationforwarder.'+module_name+'.forwarder', package='notificationforwarder.'+module_name)
-        #for k in forwarder_module.__dict__.keys():
-        #    print("{} =-=  {}  {}".format(k, type(forwarder_module.__dict__[k]), str(forwarder_module.__dict__[k])))
         forwarder_class = getattr(forwarder_module, class_name)
-        #for k in forwarder_class.__dict__.keys():
-        #    print("{} ===  {}  {}".format(k, type(forwarder_class.__dict__[k]), str(forwarder_class.__dict__[k])))
 
         instance = forwarder_class(receiveropts)
         instance.__module_file__ = forwarder_module.__file__
