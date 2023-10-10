@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "omdnotificationforwarder"
-version = "0.0.1"
+version = "1.0"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]
