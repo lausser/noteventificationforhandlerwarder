@@ -17,7 +17,7 @@ packages = ["src/notificationforwarder"]
 
 [project]
 name = "omdnotificationforwarder"
-version = "1.0"
+version = "1.0.0.1"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]

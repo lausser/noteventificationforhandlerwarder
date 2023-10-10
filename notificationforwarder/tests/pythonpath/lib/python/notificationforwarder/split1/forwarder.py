@@ -1,6 +1,3 @@
-import json
-import requests
-import os
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
 
