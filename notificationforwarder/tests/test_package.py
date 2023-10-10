@@ -1,7 +1,7 @@
-from unittest import TestCase
+import pytest
 
-class NofEvhTest(TestCase):
-    def test_import(self):
-        import notificationforwarder
-        self.assertTrue(hasattr(notificationforwarder, "new"))
+def test_import():
+    import notificationforwarder
+    assert hasattr(notificationforwarder, "baseclass")
+    assert hasattr(notificationforwarder.baseclass, "new")
 

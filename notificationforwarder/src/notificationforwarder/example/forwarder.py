@@ -10,21 +10,26 @@ class Example(NotificationForwarder):
         setattr(self, "username", getattr(self, "username", "guest"))
         setattr(self, "delay", int(getattr(self, "delay", 0)))
         setattr(self, "fail", getattr(self, "fail", None))
+        setattr(self, "signaturefile", getattr(self, "signaturefile", "/tmp/notificationforwarder_example.txt"))
         self.parameter = "sample"
 
-    @timeout(30)
-    def submit(self, payload):
+    @timeout(2, error_message="submit ran into a timeout")
+    def submit(self, event):
         time.sleep(self.delay)
         if True: # for example if self.connect()
             try:
-                logger.info("{} submits {}".format(self.username, payload.__dict__))
+                logger.info("{} submits {}".format(self.username, event.__dict__))
                 if self.fail:
                     logger.critical("sample api does not accept the payload")
                     return False
+                elif "signature" in event.payload:
+                    with open(self.signaturefile, "a") as f:
+                        print(event.payload["signature"], file=f)
+                    return True
                 else:
                     return True
             except Exception as e:
-                logger.critical("sample api post had an exception: {} with payload {}".format(str(e), str(payload)))
+                logger.critical("sample api post had an exception: {} with payload {}".format(str(e), str(event.payload)))
                 return False
         else:
            logger.critical("could not connect to the ticket system")

@@ -10,7 +10,9 @@ class ExampleFormatter(NotificationFormatter):
             'timestamp': time.time(),
         }
         json_payload['description'] = raw_event['description']
+        if 'signature' in raw_event:
+            json_payload['signature'] = raw_event['signature']
         event.set_payload(json_payload)
-        event.set_summary("this is an example")
+        event.set_summary("sum: "+json_payload['description'])
         return event
 
