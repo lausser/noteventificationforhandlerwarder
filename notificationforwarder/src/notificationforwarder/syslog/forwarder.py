@@ -30,10 +30,10 @@ class Syslog(NotificationForwarder):
         self.syslogger.addHandler(handler)
 
     @timeout(30)
-    def submit(self, payload):
+    def submit(self, event):
         try:
-            logger.info("submit "+payload)
-            self.syslogger.log(self.priority, payload)
+            logger.info("submit "+event.sumary)
+            self.syslogger.log(self.priority, event.payload)
             return True
         except Exception as e:
             logger.critical("syslog forwarding had an error: {}".format(str(e)))

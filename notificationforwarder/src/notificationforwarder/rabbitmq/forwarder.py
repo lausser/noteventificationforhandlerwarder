@@ -37,22 +37,21 @@ class Rabbitmq(NotificationForwarder):
             pass
 
     @timeout(30)
-    def submit(self, payload):
+    def submit(self, event):
         if self.connect():
             try:
-                logger.info("submit "+payload)
                 self.channel = self.connection.channel()
                 self.channel.queue_declare(queue=self.queue, durable=True)
-                for event in payload:
-                    if "service_description" in event:
-                        logger.info("host: {}, service: {}, state: {}, output: {}".format(event["host_name"], event["service_description"], event["state"], event["output"]))
-                    else:
-                        logger.info("host: {}, state: {}, output: {}".format(event["host_name"], event["state"], event["output"]))
-                    logger.debug(json.dumps(event))
-                    self.channel.basic_publish(exchange='', routing_key=MQQUEUE, body=json.dumps(event))
+                payload = event.payload
+                if "service_description" in payload:
+                    logger.info("host: {}, service: {}, state: {}, output: {}".format(payload["host_name"], payload["service_description"], payload["state"], payload["output"]))
+                else:
+                    logger.info("host: {}, state: {}, output: {}".format(payload["host_name"], payload["state"], payload["output"]))
+                logger.debug(json.dumps(payload))
+                self.channel.basic_publish(exchange='', routing_key=MQQUEUE, body=json.dumps(payload))
                 return True
             except Exception as e:
-                logger.critical("rabbitmq post had an exception: {} wit payload {}".format(str(e), str(payload)))
+                logger.critical("rabbitmq post had an exception: {} wit payload {}".format(str(e), event.summary))
                 return False
     
 
