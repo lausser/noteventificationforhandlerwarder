@@ -5,7 +5,6 @@ class EmailFormatter(NotificationFormatter):
 
     def format_event(self, raw_event):
         event = FormattedEvent()
-        if "SERVICEDESC" in raw_event:
         email_template = """
         <html>
         <body>
