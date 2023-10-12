@@ -174,7 +174,7 @@ class NotificationForwarder(object):
 
     def forward_formatted(self, formatted_event):
         try:
-            if self.probe():
+            if self.num_spooled_events() and self.probe():
                 self.flush()
         except Exception as e:
             logger.critical("flush probe failed with exception <{}>")
