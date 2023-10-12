@@ -1,4 +1,5 @@
 import syslog
+import socket
 import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 

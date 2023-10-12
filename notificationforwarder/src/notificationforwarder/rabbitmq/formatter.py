@@ -23,6 +23,6 @@ class RabbitmqFormatter(NotificationFormatter):
             json_payload['state'] = raw_event["HOSTSTATE"]
             json_payload['output'] = raw_event["HOSTOUTPUT"]
         event.set_payload([json_payload])
-        event.set_summary(json_payload)
+        event.set_summary(str(json_payload))
         return event
 

@@ -35,17 +35,17 @@ class Rabbitmq(NotificationForwarder):
             self.connection = pika.BlockingConnection(self.connectionparameters)
             self.channel = self.connection.channel()
             self.channel.queue_declare(queue=self.queue, durable=True)
-            logger.debug('Connected to {}:{}'.format(
+            logger.debug('connected to {}:{}'.format(
                 self.connectionparameters.host,
                 self.connectionparameters.port))
             self.connected = True
             return True
         except Exception as e:
             self.connected = False
-            logger.critical("connect said: "+ str(e))
+            logger.critical("rabbitmq connect failed with error {}".format(e))
             return False
 
-    def disconnect():
+    def disconnect(iself):
         try:
             self.connection.close()
         except Exception as e:
@@ -53,6 +53,7 @@ class Rabbitmq(NotificationForwarder):
 
     @timeout(30)
     def submit(self, event):
+        self.no_more_logging()
         if self.connect():
             try:
                 self.channel = self.connection.channel()
