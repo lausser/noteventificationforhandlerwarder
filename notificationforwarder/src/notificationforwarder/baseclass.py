@@ -156,17 +156,21 @@ class NotificationForwarder(object):
         try:
             if not "omd_site" in raw_event:
                 raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
-            raw_event["originating_host"] = socket.gethostname()
-            raw_event["originating_fqdn"] = socket.getfqdn()
+            raw_event["omd_originating_host"] = socket.gethostname()
+            raw_event["omd_originating_fqdn"] = socket.getfqdn()
+            raw_event["omd_originating_timestamp"] = int(time.time())
             formatted_event = self.format_event(raw_event)
-            if not hasattr(formatted_event, "payload") and not hasattr(formatted_event, "summary"):
-                logger.critical("a formatted event must have the attributes payload and summary")
+            if formatted_event and not hasattr(formatted_event, "payload") and not hasattr(formatted_event, "summary"):
+                logger.critical("a formatted event {} must have the attributes payload and summary".format(formatted_event.__class__.__name__))
                 formatted_event = None
         except Exception as e:
-            logger.critical("formatter error: "+str(e))
+            try:
+                formatted_event
+            except NameError:
+                logger.critical("raw event {} caused error {}".format(str(raw_event), str(e)))
             formatted_event = None
-
-        self.forward_formatted(formatted_event)
+        if formatted_event:
+            self.forward_formatted(formatted_event)
 
     def forward_formatted(self, formatted_event):
         try:
@@ -206,15 +210,20 @@ class NotificationForwarder(object):
             instance.__module_file__ = formatter_module.__file__
             return instance
         except ImportError:
-            logger.debug("there is no module "+module_name)
+            logger.critical("found no formatter module {}".format(module_name))
             return None
         except Exception as e:
-            logger.critical("formatter error: "+str(e))
+            logger.critical("unknown error error in formatter instntiation: {}".format(e))
             return None
 
     def format_event(self, raw_event):
         instance = self.formatter()
-        return instance.format_event(raw_event)
+        try:
+            formatted_event = instance.format_event(raw_event)
+            return formatted_event
+        except Exception as e:
+            logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+            None
 
     def connect(self):
         return True

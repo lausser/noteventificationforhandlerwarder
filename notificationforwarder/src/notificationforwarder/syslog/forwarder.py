@@ -1,5 +1,4 @@
 import syslog
-import socket
 import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
@@ -38,10 +37,11 @@ class Syslog(NotificationForwarder):
     @timeout(30)
     def submit(self, event):
         try:
-            logger.info("submit {}".format(event.payload))
+            logger.debug("submit "+event.payload)
             self.syslogger.log(self.priority, event.payload)
             return True
         except Exception as e:
             logger.critical("syslog forwarding had an error: {}".format(str(e)))
             return False
+
 

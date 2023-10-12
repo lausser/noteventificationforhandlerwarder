@@ -14,10 +14,23 @@ class Rabbitmq(NotificationForwarder):
         setattr(self, "username", getattr(self, "username", "guest"))
         setattr(self, "password", getattr(self, "password", "guest"))
 
+        self.connected = False
         credentials = pika.PlainCredentials(self.username, self.password)
         self.connectionparameters = pika.ConnectionParameters(self.server, self.port, self.vhost, credentials)
 
+    def probe(self):
+        try:
+            logger.debug("probing {}:{}".format(self.connectionparameters.host, self.connectionparameters.port))
+            success = self.connect()
+        except Exception as e:
+            success = False
+        logger.debug("probing {}:{} {}".format(self.connectionparameters.host, self.connectionparameters.port, "succeeded" if success else "failed"))
+        return success
+
     def connect(self):
+        if self.connected:
+            # a previous probe was successful
+            return True
         try:
             self.connection = pika.BlockingConnection(self.connectionparameters)
             self.channel = self.connection.channel()
@@ -25,8 +38,10 @@ class Rabbitmq(NotificationForwarder):
             logger.debug('Connected to {}:{}'.format(
                 self.connectionparameters.host,
                 self.connectionparameters.port))
+            self.connected = True
             return True
         except Exception as e:
+            self.connected = False
             logger.critical("connect said: "+ str(e))
             return False
 
@@ -42,16 +57,15 @@ class Rabbitmq(NotificationForwarder):
             try:
                 self.channel = self.connection.channel()
                 self.channel.queue_declare(queue=self.queue, durable=True)
-                payload = event.payload
-                if "service_description" in payload:
-                    logger.info("host: {}, service: {}, state: {}, output: {}".format(payload["host_name"], payload["service_description"], payload["state"], payload["output"]))
-                else:
-                    logger.info("host: {}, state: {}, output: {}".format(payload["host_name"], payload["state"], payload["output"]))
-                logger.debug(json.dumps(payload))
-                self.channel.basic_publish(exchange='', routing_key=MQQUEUE, body=json.dumps(payload))
+                # The payload for such queueing destinations are always a list. Usually with just one element,
+                # but with the potential to send multiple packets during one session.
+                for single_event in event.payload:
+                    logger.debug(json.dumps(single_event))
+                    self.channel.basic_publish(exchange='', routing_key=self.queue, body=json.dumps(single_event))
                 return True
             except Exception as e:
                 logger.critical("rabbitmq post had an exception: {} wit payload {}".format(str(e), event.summary))
                 return False
     
-
+    def __del__(self):
+        self.disconnect()

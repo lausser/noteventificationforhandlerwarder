@@ -7,7 +7,7 @@ import os
 import sys
 #import logging
 from coshsh.util import setup_logging
-import notificationforwarder
+from notificationforwarder import baseclass
 import traceback
 
 
@@ -63,9 +63,10 @@ the type of backend. Example for VictorOps:
                       default=False)
     args = parser.parse_args()
     try:
-        forwarder = notificationforwarder.new(args.receiver, args.receivertag, args.verbose, args.debug, args.receiveropt)
+        forwarder = baseclass.new(args.receiver, args.receivertag, args.verbose, args.debug, args.receiveropt)
     except Exception as a:
-        logger = logging.getLogger(args.receiver)
+        logger_name = "notificationforwarder_"+args.receiver+("_"+args.receivertag if args.receivertag else "")
+        logger = logging.getLogger(logger_name)
         traceback.print_exc(file=sys.stdout)
         logger.critical("there is no class for "+args.receiver)
         sys.exit(1)
