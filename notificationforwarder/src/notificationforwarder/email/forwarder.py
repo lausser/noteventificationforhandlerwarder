@@ -12,16 +12,16 @@ class Email(NotificationForwarder):
         setattr(self, "recipient", getattr(self, "recipient", None))
 
     @timeout(30)
-    def submit(self, payload):
+    def submit(self, event):
         try:
             message = MIMEMultipart()
             message['From'] = getpass.getuser()
             message['To'] = self.recipient
-            message['Subject'] = payload["subject"]
-            if "html" in payload:
-                message.attach(MIMEText(payload["html"], "html"))
-            elif "text" in payload:
-                message.attach(MIMEText(payload["text"], "text"))
+            message['Subject'] = event.payload["subject"]
+            if "html" in event.payload:
+                message.attach(MIMEText(event.payload["html"], "html"))
+            elif "text" in event.payload:
+                message.attach(MIMEText(event.payload["text"], "text"))
             else:
                 message.attach(MIMEText("formatter must return html or text", "text"))
             server = smtplib.SMTP(smtp_server, smtp_port)
