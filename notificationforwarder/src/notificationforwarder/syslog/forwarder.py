@@ -1,4 +1,5 @@
 import syslog
+import socket
 import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
@@ -10,9 +11,10 @@ class Syslog(NotificationForwarder):
         setattr(self, "server", getattr(self, "server", "localhost"))
         setattr(self, "facility", getattr(self, "facility", "log_local0"))
         setattr(self, "priority", getattr(self, "priority", "info"))
+        setattr(self, "protocol", getattr(self, "protocol", "udp"))
         if self.facility in logging.handlers.SysLogHandler.facility_names:
             self.facility = logging.handlers.SysLogHandler.facility_names[self.facility]
-        elif "log_"+self.facility in known_facilities:
+        elif "log_"+self.facility in logging.handlers.SysLogHandler.facility_names:
             self.facility = logging.handlers.SysLogHandler.facility_names["log_"+self.facility]
         else:
             self.facility = logging.handlers.SysLogHandler.LOG_DAEMON
@@ -26,17 +28,20 @@ class Syslog(NotificationForwarder):
         # do not suppress anything. (normal logger and syslog have
         # completely different levels. setLevel(NOTSET) does not work.
         self.syslogger.setLevel(-1)
-        handler = logging.handlers.SysLogHandler(address=(self.server, self.port), facility=self.facility)
+        if self.protocol == "udp":
+            socktype = socket.SOCK_DGRAM
+        else:
+            socktype = socket.SOCK_STREAM
+        handler = logging.handlers.SysLogHandler(address=(self.server, self.port), facility=self.facility, socktype=socktype)
         self.syslogger.addHandler(handler)
 
     @timeout(30)
     def submit(self, event):
         try:
-            logger.info("submit "+event.sumary)
+            logger.info("submit {}".format(event.payload))
             self.syslogger.log(self.priority, event.payload)
             return True
         except Exception as e:
             logger.critical("syslog forwarding had an error: {}".format(str(e)))
             return False
-
 

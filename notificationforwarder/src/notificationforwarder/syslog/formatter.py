@@ -4,10 +4,11 @@ class SyslogFormatter(NotificationFormatter):
 
     def format_event(self, raw_event):
         event = FormattedEvent()
-        if "service_description" in raw_event:
-            event.set_payload("host: {}, service: {}, state: {}, output: {}".format(raw_event["host_name"], raw_event["service_description"], raw_event["state"], raw_event["output"]))
-            event.set_summary("host: {}, service: {}, state: {}".format(raw_event["host_name"], raw_event["service_description"], raw_event["state"]))
+        if "SERVICEDESC" in raw_event:
+            event.set_payload("host: {}, service: {}, state: {}, output: {}".format(raw_event["HOSTNAME"], raw_event["SERVICEDESC"], raw_event["SERVICESTATE"], raw_event["SERVICEOUTPUT"]))
+            event.set_summary("host: {}, service: {}, state: {}".format(raw_event["HOSTNAME"], raw_event["SERVICEDESC"], raw_event["SERVICESTATE"]))
         else:
-            event.set_payload("host: {}, state: {}, output: {}".format(raw_event["host_name"], raw_event["state"], raw_event["output"]))
-            event.set_summary("host: {}, state: {}".format(raw_event["host_name"], raw_event["state"]))
+            event.set_payload("host: {}, state: {}, output: {}".format(raw_event["HOSTNAME"], raw_event["HOSTSTATE"], raw_event["HOSTOUTPUT"]))
+            event.set_summary("host: {}, state: {}".format(raw_event["HOSTNAME"], raw_event["HOSTSTATE"]))
         return event
+
