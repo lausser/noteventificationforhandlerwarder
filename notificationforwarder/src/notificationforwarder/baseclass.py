@@ -115,7 +115,6 @@ class NotificationForwarder(object):
         sql_create = """CREATE TABLE IF NOT EXISTS """+self.table_name+""" (
                 id INTEGER PRIMARY KEY,
                 payload TEXT NOT NULL,
-                summary TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             )"""
         try:
@@ -126,6 +125,23 @@ class NotificationForwarder(object):
         except Exception as e:
             logger.info("error initializing database {}: {}".format(self.db_file, str(e)))
 
+    def new_formatter(self):
+        try:
+            module_name = self.__class__.__name__.lower()
+            class_name = self.__class__.__name__+"Formatter"
+            formatter_module = import_module('.formatter', package='notificationforwarder.'+module_name)
+            formatter_module.logger = logger
+            formatter_class = getattr(formatter_module, class_name)
+            instance = formatter_class()
+            instance.__module_file__ = formatter_module.__file__
+            return instance
+        except ImportError:
+            logger.critical("found no formatter module {}".format(module_name))
+            return None
+        except Exception as e:
+            logger.critical("unknown error error in formatter instntiation: {}".format(e))
+            return None
+
     def probe(self):
         """Checks if a forwarder is principally able to submit an event.
         It is mostly used to contact an api and confirm that it is alive.
@@ -135,14 +151,26 @@ class NotificationForwarder(object):
         """
         return True
 
-    def forward(self, raw_event):
-        self.initdb()
+    def format_event(self, raw_event):
+        instance = self.new_formatter()
+        print("------------------------------------")
+        print(raw_event)
+
+        if not "omd_site" in raw_event:
+            raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
+        raw_event["omd_originating_host"] = socket.gethostname()
+        raw_event["omd_originating_fqdn"] = socket.getfqdn()
+        raw_event["omd_originating_timestamp"] = int(time.time())
         try:
-            if not "omd_site" in raw_event:
-                raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
-            raw_event["omd_originating_host"] = socket.gethostname()
-            raw_event["omd_originating_fqdn"] = socket.getfqdn()
-            raw_event["omd_originating_timestamp"] = int(time.time())
+            formatted_event = instance.format_event(raw_event)
+            print("-----")
+            return formatted_event
+        except Exception as e:
+            logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+            return None
+
+    def forward(self, raw_event):
+        try:
             formatted_event = self.format_event(raw_event)
             if formatted_event and not hasattr(formatted_event, "payload") and not hasattr(formatted_event, "summary"):
                 logger.critical("a formatted event {} must have the attributes payload and summary".format(formatted_event.__class__.__name__))
@@ -155,7 +183,7 @@ class NotificationForwarder(object):
             formatted_event = None
         if formatted_event:
             success = self.forward_formatted(formatted_event)
-            if not success:
+            if not success and not formatted_event.is_heartbeat:
                 self.spool(raw_event)
 
     def forward_formatted(self, formatted_event):
@@ -186,53 +214,6 @@ class NotificationForwarder(object):
                 logger.warning("forward failed, spooling {}".format(formatted_event.summary))
             return False
 
-    def formatter(self):
-        try:
-            module_name = self.__class__.__name__.lower()
-            class_name = self.__class__.__name__+"Formatter"
-            formatter_module = import_module('.formatter', package='notificationforwarder.'+module_name)
-            formatter_module.logger = logger
-            formatter_class = getattr(formatter_module, class_name)
-            instance = formatter_class()
-            instance.__module_file__ = formatter_module.__file__
-            return instance
-        except ImportError:
-            logger.critical("found no formatter module {}".format(module_name))
-            return None
-        except Exception as e:
-            logger.critical("unknown error error in formatter instntiation: {}".format(e))
-            return None
-
-    def format_event(self, raw_event):
-        instance = self.formatter()
-        try:
-            formatted_event = instance.format_event(raw_event)
-            return formatted_event
-        except Exception as e:
-            logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
-            return None
-
-    def connect(self):
-        return True
-
-    def disconnect(self):
-        return True
-
-    def initdb(self):
-        self.table_name = "events_"+self.name
-        sql_create = """CREATE TABLE IF NOT EXISTS """+self.table_name+""" (
-                id INTEGER PRIMARY KEY,
-                payload TEXT NOT NULL,
-                summary TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-            )"""
-        try:
-            self.dbconn = sqlite3.connect(self.db_file)
-            self.dbcurs = self.dbconn.cursor()
-            self.dbcurs.execute(sql_create)
-            self.dbconn.commit()
-        except Exception as e:
-            logger.info("error initializing database {}: {}".format(self.db_file, str(e)))
 
     def num_spooled_events(self):
         sql_count = "SELECT COUNT(*) FROM "+self.table_name
@@ -248,16 +229,14 @@ class NotificationForwarder(object):
     def spool(self, raw_event):
         sql_insert = "INSERT INTO "+self.table_name+"(payload) VALUES (?)"
         try:
-            num_spooled_events = 0
             text = json.dumps(raw_event)
             self.dbcurs.execute(sql_insert, (text,))
             self.dbconn.commit()
-            num_spooled_events += 1
             spooled_events = self.num_spooled_events()
             logger.warning("spooling queue length is {}".format(spooled_events))
         except Exception as e:
             logger.critical("database error "+str(e))
-            logger.info(event.__dict__)
+            logger.info(raw_event)
 
     def flush(self):
         sql_delete = "DELETE FROM "+self.table_name+" WHERE CAST(STRFTIME('%s', timestamp) AS INTEGER) < ?"
@@ -279,33 +258,44 @@ class NotificationForwarder(object):
                     dropped = self.dbcurs.rowcount
                     if dropped:
                         logger.info("dropped {} outdated events".format(dropped))
-                    last_spooled_events = 0
+                    last_events_to_flush = 0
                     while True:
-                        spooled_events = self.num_spooled_events()
-                        if spooled_events:
-                            logger.info("there are {} spooled events to be re-sent".format(spooled_events))
+                        logger.debug("-")
+                        logger.debug("---->enter true loop with last_events_to_flush {}".format(last_events_to_flush))
+                        events_to_flush = self.num_spooled_events()
+                        logger.debug("enter true loop with events_to_flush {}".format(events_to_flush))
+                        if events_to_flush:
+                            logger.info("there are {} spooled events to be re-sent".format(events_to_flush))
                         else:
+                            logger.debug("nothing left to flush")
                             break
-                        if last_spooled_events == spooled_events:
-                            if spooled_events != 0:
-                                logger.critical("{} spooled events could not be submitted".format(last_spooled_events))
+                        if last_events_to_flush == events_to_flush:
+                            logger.debug("X last cycle wanted to flush {}, now {} in the db".format(last_events_to_flush, events_to_flush))
+                            if events_to_flush != 0:
+                                logger.critical("{} spooled events could not be submitted".format(last_events_to_flush))
                             break
                         else:
+                            logger.debug("AGA last cycle wanted to flush {}, now {} in the db".format(last_events_to_flush, events_to_flush))
                             self.dbcurs.execute(sql_select)
                             id_events = self.dbcurs.fetchall()
-                            for id, raw_event in id_events:
-
-                                event = FormattedEvent()
-                                event.is_heartbeat = False
-                                event.payload = json.loads(payload)
-                                event.summary = summary
-                                if self.submit(event):
-                                    self.dbcurs.execute(sql_delete_id, (id, ))
-                                    logger.info("delete spooled event {}".format(id))
-                                    self.dbconn.commit()
+                            for id, text in id_events:
+                                raw_event = json.loads(text)
+                                formatted_event = self.format_event(raw_event)
+                                if formatted_event:
+                                    #
+                                    success = self.submit(formatted_event)
+                                    if success:
+                                        self.dbcurs.execute(sql_delete_id, (id, ))
+                                        logger.info("delete spooled event {}".format(id))
+                                        self.dbconn.commit()
+                                    else:
+                                        logger.critical("event {} stays in spool".format(id))
                                 else:
-                                    logger.critical("event {} spooled again".format(id))
-                            last_spooled_events = spooled_events
+                                    logger.critical("could not format spooled {}. sorry, but i will delete this garbage with id {}".format(raw_event, id))
+                                    self.dbcurs.execute(sql_delete_id, (id, ))
+                                    logger.info("delete trash event {}".format(id))
+                                    self.dbconn.commit()
+                            last_events_to_flush = events_to_flush
                     self.dbconn.commit()
                 except Exception as e:
                     logger.critical("database flush failed")
@@ -318,6 +308,12 @@ class NotificationForwarder(object):
         # it's own logs and writing the summary by the baseclass is not
         # desired.
         self.baseclass_logs_summary = False
+
+    def connect(self):
+        return True
+
+    def disconnect(self):
+        return True
 
     def __del__(self):
         try:
@@ -338,6 +334,7 @@ class NotificationFormatter(metaclass=ABCMeta):
 
 class FormattedEvent(metaclass=ABCMeta):
     def __init__(self):
+        self.is_heartbeat = False
         self.payload = None
         self.summary = "empty event"
 

@@ -5,6 +5,9 @@ from notificationforwarder.baseclass import NotificationFormatter, FormattedEven
 class ExampleFormatter(NotificationFormatter):
 
     def format_event(self, raw_event):
+        print("+++++++++++++++++++++")
+        print(raw_event)
+        print("++++")
         event = FormattedEvent()
         json_payload = {
             'timestamp': time.time(),
@@ -14,5 +17,6 @@ class ExampleFormatter(NotificationFormatter):
             json_payload['signature'] = raw_event['signature']
         event.set_payload(json_payload)
         event.set_summary("sum: "+json_payload['description'])
+        print("+ret")
         return event
 

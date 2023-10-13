@@ -55,7 +55,7 @@ def test_split1_forwarder(setup):
     assert split1.__module_file__.endswith("pythonpath/lib/python/notificationforwarder/split1/forwarder.py")
     assert split1.password == "dem_is_geheim"
     assert split1.queued_events == []
-    fsplit1 = split1.formatter()
+    fsplit1 = split1.new_formatter()
     assert fsplit1.__class__.__name__ == "Split1Formatter"
     assert fsplit1.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split1/formatter.py")
     split1.forward(eventopts)
@@ -82,7 +82,7 @@ def test_split2_forwarder(setup):
     assert split2.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split2/forwarder.py")
     assert split2.password == "dem_is_geheim"
     assert split2.queued_events == []
-    fsplit2 = split2.formatter()
+    fsplit2 = split2.new_formatter()
     assert fsplit2.__class__.__name__ == "Split2Formatter"
     assert fsplit2.__module_file__.endswith("pythonpath/lib/python/notificationforwarder/split2/formatter.py")
     split2.forward(eventopts)
@@ -109,7 +109,7 @@ def test_split3_forwarder(setup):
     assert split3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split3/forwarder.py")
     assert split3.password == "dem_is_geheim"
     assert split3.queued_events == []
-    fsplit3 = split3.formatter()
+    fsplit3 = split3.new_formatter()
     assert fsplit3.__class__.__name__ == "Split3Formatter"
     assert fsplit3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split3/formatter.py")
     split3.forward(eventopts)

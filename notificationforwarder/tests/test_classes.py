@@ -3,7 +3,7 @@ import os
 import re
 import shutil
 import hashlib, secrets
-import notificationforwarder
+import notificationforwarder.baseclass
 import logging
 
 
@@ -158,8 +158,8 @@ def test_example_forwarder_forward_timeout(setup):
     log = open(get_logfile(example)).read()
     assert "spooled <sum: halo i bim au 1 alarm vong naemon her>" in log
     assert "WARNING - spooling queue length is 2" in log
-
     # now the last two events were spooled and are in the database
+
     reveiveropts = {
         "username": "i_bims",
         "password": "i_bims_1_i_bims",

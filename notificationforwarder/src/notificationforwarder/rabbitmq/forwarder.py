@@ -53,7 +53,6 @@ class Rabbitmq(NotificationForwarder):
 
     @timeout(30)
     def submit(self, event):
-        self.no_more_logging()
         if self.connect():
             try:
                 self.channel = self.connection.channel()
