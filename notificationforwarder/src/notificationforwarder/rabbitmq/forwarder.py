@@ -47,7 +47,7 @@ class Rabbitmq(NotificationForwarder):
             return True
         except Exception as e:
             self.connected = False
-            logger.critical("rabbitmq connect pf{} ct{} failed with error {}".format(self.probing_failed, self.connected, e))
+            logger.critical("rabbitmq connect failed with error {}".format(e))
             return False
 
     def disconnect(iself):
@@ -65,7 +65,6 @@ class Rabbitmq(NotificationForwarder):
                 # The payload for such queueing destinations are always a list. Usually with just one element,
                 # but with the potential to send multiple packets during one session.
                 for single_event in event.payload:
-                    logger.debug(json.dumps(single_event))
                     self.channel.basic_publish(exchange='', routing_key=self.queue, body=json.dumps(single_event))
                 return True
             except Exception as e:
