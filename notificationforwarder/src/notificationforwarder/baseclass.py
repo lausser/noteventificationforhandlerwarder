@@ -153,9 +153,6 @@ class NotificationForwarder(object):
 
     def format_event(self, raw_event):
         instance = self.new_formatter()
-        print("------------------------------------")
-        print(raw_event)
-
         if not "omd_site" in raw_event:
             raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
         raw_event["omd_originating_host"] = socket.gethostname()
@@ -163,7 +160,6 @@ class NotificationForwarder(object):
         raw_event["omd_originating_timestamp"] = int(time.time())
         try:
             formatted_event = instance.format_event(raw_event)
-            print("-----")
             return formatted_event
         except Exception as e:
             logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
@@ -260,22 +256,17 @@ class NotificationForwarder(object):
                         logger.info("dropped {} outdated events".format(dropped))
                     last_events_to_flush = 0
                     while True:
-                        logger.debug("-")
-                        logger.debug("---->enter true loop with last_events_to_flush {}".format(last_events_to_flush))
                         events_to_flush = self.num_spooled_events()
-                        logger.debug("enter true loop with events_to_flush {}".format(events_to_flush))
                         if events_to_flush:
                             logger.info("there are {} spooled events to be re-sent".format(events_to_flush))
                         else:
                             logger.debug("nothing left to flush")
                             break
                         if last_events_to_flush == events_to_flush:
-                            logger.debug("X last cycle wanted to flush {}, now {} in the db".format(last_events_to_flush, events_to_flush))
                             if events_to_flush != 0:
                                 logger.critical("{} spooled events could not be submitted".format(last_events_to_flush))
                             break
                         else:
-                            logger.debug("AGA last cycle wanted to flush {}, now {} in the db".format(last_events_to_flush, events_to_flush))
                             self.dbcurs.execute(sql_select)
                             id_events = self.dbcurs.fetchall()
                             for id, text in id_events:

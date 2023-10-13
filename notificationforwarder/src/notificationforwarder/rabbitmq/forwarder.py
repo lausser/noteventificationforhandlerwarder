@@ -15,6 +15,7 @@ class Rabbitmq(NotificationForwarder):
         setattr(self, "password", getattr(self, "password", "guest"))
 
         self.connected = False
+        self.has_been_probed = False
         credentials = pika.PlainCredentials(self.username, self.password)
         self.connectionparameters = pika.ConnectionParameters(self.server, self.port, self.vhost, credentials)
 
@@ -24,6 +25,7 @@ class Rabbitmq(NotificationForwarder):
             success = self.connect()
         except Exception as e:
             success = False
+        self.has_been_probed = True
         logger.debug("probing {}:{} {}".format(self.connectionparameters.host, self.connectionparameters.port, "succeeded" if success else "failed"))
         return success
 
@@ -31,6 +33,9 @@ class Rabbitmq(NotificationForwarder):
         if self.connected:
             # a previous probe was successful
             return True
+        elif self.has_been_probed and not self.connected:
+            # we are in submit() and a prevoius probe() has failed. give up here.
+            return False
         try:
             self.connection = pika.BlockingConnection(self.connectionparameters)
             self.channel = self.connection.channel()
@@ -42,7 +47,7 @@ class Rabbitmq(NotificationForwarder):
             return True
         except Exception as e:
             self.connected = False
-            logger.critical("rabbitmq connect failed with error {}".format(e))
+            logger.critical("rabbitmq connect pf{} ct{} failed with error {}".format(self.probing_failed, self.connected, e))
             return False
 
     def disconnect(iself):
@@ -66,6 +71,8 @@ class Rabbitmq(NotificationForwarder):
             except Exception as e:
                 logger.critical("rabbitmq post had an exception: {} wit payload {}".format(str(e), event.summary))
                 return False
+        else:
+            return False
     
     def __del__(self):
         self.disconnect()
