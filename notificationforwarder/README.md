@@ -40,8 +40,8 @@ define command{
                     >> $USER4$/var/log/notificationforwarder_victorops.log 2>&1
 }
 ```
-Your service notifications should be sent to VictorOPs (which is called Splunk On Call today, as VictorOPs was aquired by Splunk). The notification script will talk to an api and upload a a well-formatted Json payload. Therefore the notiifcation framework has two jobs. 
-Take the event attributes (all the --eventopt arguments) and transform them to a Json structure. Then upload it with a POST request.
+Your service notifications should be sent to some ticket tool. The notification script will talk to a REST api and upload a a well-formatted Json payload. Therefore the notifcation framework has two jobs. 
+First, take the event attributes (all the --eventopt arguments) and transform them to a Json structure. Then, upload it with a POST request.
 
 In your OMD site you create a folder *~/local/lib/python/notificationforwarder/myspecialreceiver* and add two files, *formatter.py* and forwarder.py.
 A skeleton for the *formatter.py* looks like this:
@@ -57,6 +57,7 @@ class MyspecialreceiverFormatter(NotificationFormatter):
         json_payload = {}
         # fill the payload with whatever is required
         json_payload['hostname'] = event.eventopts['HOSTNAME']
+        json_payload['remark'] = "here is a ticket for you, haha"
        
         event.payload = json_payload
         event.summary = "this is a one-line summary which will be used to write a log"
@@ -75,8 +76,7 @@ ormatter, timeout
 class MyspecialreceiverForwarder(NotificationForwarder):
     def __init__(self, opts):
         super(self.__class__, self).__init__(opts)
-        self.url = "https://alert.someapi.com/integrations/generic/"+self.comp
-any_id+"/alert/"+self.company_key+"/"+self.routing_key
+        self.url = "https://alert.someapi.com/v1/tickets/"+self.company_id+"/alert/"+self.company_key+"/"+self.routing_key
 
     @timeout(30)
     def submit(self, event):
