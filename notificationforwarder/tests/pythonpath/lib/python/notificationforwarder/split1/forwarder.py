@@ -1,7 +1,7 @@
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
 
-class Split1(NotificationForwarder):
+class Split1Forwarder(NotificationForwarder):
     def __init__(self, opts):
         super(self.__class__, self).__init__(opts)
         self.url = "https://split1.com"

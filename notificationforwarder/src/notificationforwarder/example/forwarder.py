@@ -4,7 +4,7 @@ import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
 
-class Example(NotificationForwarder):
+class ExampleForwarder(NotificationForwarder):
     def __init__(self, opts):
         super(self.__class__, self).__init__(opts)
         setattr(self, "username", getattr(self, "username", "guest"))

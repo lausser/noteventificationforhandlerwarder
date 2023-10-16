@@ -51,7 +51,7 @@ def test_split1_forwarder(setup):
         "description": "halo i bims 1 alarm vong naemon her",
     }
     split1 = notificationforwarder.baseclass.new("split1", None, True, True,  reveiveropts)
-    assert split1.__class__.__name__ == "Split1"
+    assert split1.__class__.__name__ == "Split1Forwarder"
     assert split1.__module_file__.endswith("pythonpath/lib/python/notificationforwarder/split1/forwarder.py")
     assert split1.password == "dem_is_geheim"
     assert split1.queued_events == []
@@ -78,7 +78,7 @@ def test_split2_forwarder(setup):
         "description": "halo i bims 1 alarm vong naemon her",
     }
     split2 = notificationforwarder.baseclass.new("split2", None, True, True,  reveiveropts)
-    assert split2.__class__.__name__ == "Split2"
+    assert split2.__class__.__name__ == "Split2Forwarder"
     assert split2.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split2/forwarder.py")
     assert split2.password == "dem_is_geheim"
     assert split2.queued_events == []
@@ -105,7 +105,7 @@ def test_split3_forwarder(setup):
         "description": "halo i bims 1 alarm vong naemon her",
     }
     split3 = notificationforwarder.baseclass.new("split3", None, True, True,  reveiveropts)
-    assert split3.__class__.__name__ == "Split3"
+    assert split3.__class__.__name__ == "Split3Forwarder"
     assert split3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split3/forwarder.py")
     assert split3.password == "dem_is_geheim"
     assert split3.queued_events == []

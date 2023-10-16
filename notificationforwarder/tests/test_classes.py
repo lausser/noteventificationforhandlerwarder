@@ -1,6 +1,7 @@
 import pytest
 import os
 import re
+import time
 import shutil
 import hashlib, secrets
 import notificationforwarder.baseclass
@@ -36,14 +37,14 @@ def test_example_forwarder(setup):
         "password": "dem_is_geheim"
     }
     example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
-    assert example.__class__.__name__ == "Example"
+    assert example.__class__.__name__ == "ExampleForwarder"
     assert example.password == "dem_is_geheim"
     assert example.queued_events == []
 
 
 def _test_example_formatter(setup):
     example = notificationforwarder.baseclass.new("example", None, True, True,  {})
-    fexample = example.formatter()
+    fexample = example.new_formatter()
     assert fexample.__class__.__name__ == "ExampleFormatter"
 
 
@@ -67,14 +68,16 @@ def test_example_logging(setup):
     assert logfile.endswith("notificationforwarder_example_2.log")
     
 
-def _test_example_formatter_format_event(setup):
+def test_example_formatter_format_event(setup):
     example = notificationforwarder.baseclass.new("example", None, True, True,  {})
-    fexample = example.formatter()
+    fexample = example.new_formatter()
     raw_event = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    event = fexample.format_event(raw_event)
-    assert event.summary == "this is an example"
+    event = notificationforwarder.baseclass.FormattedEvent(raw_event)
+    assert event.eventopts["description"] == "halo i bims 1 alarm vong naemon her"
+    fexample.format_event(event)
+    assert event.summary == "sum: halo i bims 1 alarm vong naemon her"
     assert event.payload["description"] == "halo i bims 1 alarm vong naemon her"
     assert event.payload["timestamp"] == pytest.approx(time.time(), abs=5)
 

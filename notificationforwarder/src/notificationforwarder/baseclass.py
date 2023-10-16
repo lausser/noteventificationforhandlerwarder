@@ -46,7 +46,7 @@ def new(target_name, tag, verbose, debug, receiveropts):
             module_name, class_name = target_name.rsplit('.', 1)
         else:
             module_name = target_name
-            class_name = target_name.capitalize()
+            class_name = target_name.capitalize()+"Forwarder"
         forwarder_module = import_module('notificationforwarder.'+module_name+'.forwarder', package='notificationforwarder.'+module_name)
         forwarder_class = getattr(forwarder_module, class_name)
 
@@ -127,8 +127,8 @@ class NotificationForwarder(object):
 
     def new_formatter(self):
         try:
-            module_name = self.__class__.__name__.lower()
-            class_name = self.__class__.__name__+"Formatter"
+            module_name = self.__class__.__name__.replace("Forwarder", "").lower()
+            class_name = self.__class__.__name__.replace("Forwarder", "")+"Formatter"
             formatter_module = import_module('.formatter', package='notificationforwarder.'+module_name)
             formatter_module.logger = logger
             formatter_class = getattr(formatter_module, class_name)
@@ -159,7 +159,8 @@ class NotificationForwarder(object):
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
         raw_event["omd_originating_timestamp"] = int(time.time())
         try:
-            formatted_event = instance.format_event(raw_event)
+            formatted_event = FormattedEvent(raw_event)
+            instance.format_event(formatted_event)
             return formatted_event
         except Exception as e:
             logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
@@ -168,7 +169,7 @@ class NotificationForwarder(object):
     def forward(self, raw_event):
         try:
             formatted_event = self.format_event(raw_event)
-            if formatted_event and not hasattr(formatted_event, "payload") and not hasattr(formatted_event, "summary"):
+            if formatted_event and not formatted_event.is_complete():
                 logger.critical("a formatted event {} must have the attributes payload and summary".format(formatted_event.__class__.__name__))
                 formatted_event = None
         except Exception as e:
@@ -324,13 +325,42 @@ class NotificationFormatter(metaclass=ABCMeta):
 
 
 class FormattedEvent(metaclass=ABCMeta):
-    def __init__(self):
-        self.is_heartbeat = False
-        self.payload = None
-        self.summary = "empty event"
+    def __init__(self, eventopts):
+        self._is_heartbeat = False
+        self._eventopts = eventopts
+        self._payload = None
+        self._summary = None
 
-    def set_payload(self, payload):
-        self.payload = payload
+    @property
+    def eventopts(self):
+        return self._eventopts
 
-    def set_summary(self, summary):
-        self.summary = summary
+    @property
+    def is_heartbeat(self):
+        return self._is_heartbeat
+
+    @is_heartbeat.setter
+    def is_heartbeat(self, value):
+        self._is_heartbeat = value
+
+    @property
+    def payload(self):
+        return self._payload
+
+    @payload.setter
+    def payload(self, payload):
+        self._payload = payload
+
+    @property
+    def summary(self):
+        return self._summary
+
+    @summary.setter
+    def summary(self, summary):
+        self._summary = summary
+
+    def is_complete(self):
+        if self._payload == None or self._summary == None:
+            return False
+        return True
+

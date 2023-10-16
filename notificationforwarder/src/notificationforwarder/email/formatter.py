@@ -3,8 +3,7 @@ from jinja2 import Template
 
 class EmailFormatter(NotificationFormatter):
 
-    def format_event(self, raw_event):
-        event = FormattedEvent()
+    def format_event(self, event):
         email_template = """
         <html>
         <body>
@@ -17,9 +16,9 @@ class EmailFormatter(NotificationFormatter):
         """
         template = Template(email_template)
         data = {
-            "host_name": raw_event.get("HOSTNAME"),
-            "service_description": raw_event.get("SERVICEDESC", None),
+            "host_name": event.eventopts.get("HOSTNAME"),
+            "service_description": event.eventopts.get("SERVICEDESC", None),
         }
-        event.set_payload({"html": template.render(data)})
-        event.set_summary("mail")
+        event.payload = {"html": template.render(data)}
+        event.summary = "mail"
 
