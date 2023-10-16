@@ -98,7 +98,7 @@ class MyspecialreceiverForwarder(NotificationForwarder):
         return r.status_code == 200
 ```
 
-Again, the class name has to be the argument of the *\-\-receiver* parameter with the first letter in upper case, but this time with "Forwarder" appended. This class must have a method *submit()*, which gets the event object which was supplied with payload and summary in the formatting step. In submit() returns a False value, the framework will spool the event in a database.
-The next time, Naemon runs the notificationforwarder script for this receiver, it will try to submit the events which have been spooled so far. If the Forwarder class has an optional method *probe()*, it will check if the receiver is now up again before it flushed the spooled events.
+Again, the class name has to be the argument of the *\-\-receiver* parameter with the first letter in upper case, but this time with "Forwarder" appended. This class must have a method *submit()*, which gets the event object which was supplied with payload and summary in the formatting step. If submit() returns a False value, the framework will spool the event in a database.
+The next time Naemon is executing the notificationforwarder script for this receiver, it will try to submit the events which have been spooled so far. If the Forwarder class has an optional method *probe()*, it will check if the receiver is now up again before it flushes the spooled events.
 
 
