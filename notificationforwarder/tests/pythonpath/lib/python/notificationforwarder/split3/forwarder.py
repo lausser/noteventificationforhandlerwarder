@@ -7,7 +7,7 @@ class Split3Forwarder(NotificationForwarder):
         self.url = "https://split1.com"
 
     @timeout(30)
-    def submit(self, payload):
+    def submit(self, event):
         logger.info("forwarder "+self.__module_file__)
         return True
 

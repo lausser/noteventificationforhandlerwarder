@@ -6,13 +6,15 @@ import re
 import shutil
 import hashlib, secrets
 import logging
+import subprocess
+import hashlib, secrets
+
 
 omd_root = os.path.dirname(__file__)
 os.environ["OMD_ROOT"] = omd_root
 if not [p for p in sys.path if "pythonpath" in p]:
     sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python")
     sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/lib/python")
-    print("PYTHONPATH="+":".join(sys.path))
 import notificationforwarder.baseclass
 
 
@@ -41,8 +43,7 @@ def get_logfile(forwarder):
 
 def test_split1_forwarder(setup):
     # lib            local/lib
-    # forwarder      formatter
-    print(sys.path)
+    # forwarder*     formatter*
     reveiveropts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
@@ -60,8 +61,50 @@ def test_split1_forwarder(setup):
     assert fsplit1.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split4/formatter.py")
     split1.forward(eventopts)
     log = open(get_logfile(split1)).read()
-    print(log)
     assert re.search(r'forwarder '+split1.__module_file__, log)
     assert re.search(r'formatter '+fsplit1.__module_file__, log)
+
+
+def test_split3_forwarder_split4_formatter(setup):
+    # lib            local/lib
+    # forwarder      forwarder*
+    #                formatter*
+    reveiveropts = {
+        "username": "i_bims",
+        "password": "dem_is_geheim"
+    }
+    eventopts = {
+        "description": "halo i bims 1 alarm vong naemon her",
+    }
+    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  reveiveropts)
+    assert split3.__class__.__name__ == "Split3Forwarder"
+    assert split3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split3/forwarder.py")
+    assert split3.password == "dem_is_geheim"
+    assert split3.queued_events == []
+    fsplit3 = split3.new_formatter()
+    assert fsplit3.__class__.__name__ == "Split4Formatter"
+    assert fsplit3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split4/formatter.py")
+    split3.forward(eventopts)
+    log = open(get_logfile(split3)).read()
+    assert "split4_" in log
+    assert re.search(r'forwarder '+split3.__module_file__, log)
+    assert re.search(r'formatter '+fsplit3.__module_file__, log)
+
+def test_split3_forwarder_split4_formatter_bin(setup):
+    # this is used to find out the logfile
+    reveiveropts = {
+        "username": "i_bims",
+        "password": "dem_is_geheim"
+    }
+    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  reveiveropts)
+    # split4 formatter writes "split4_<optional signature>_split4" in the summary
+    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
+    print("PYTHONPATH="+pythonpath)
+    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature), shell=True)
+    log = open(get_logfile(split3)).read()
+    assert "split4_"+signature+"_split4" in log
 
 
