@@ -36,20 +36,20 @@ def test_example_forwarder(setup):
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     assert example.__class__.__name__ == "ExampleForwarder"
     assert example.password == "dem_is_geheim"
     assert example.queued_events == []
 
 
 def _test_example_formatter(setup):
-    example = notificationforwarder.baseclass.new("example", None, True, True,  {})
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  {})
     fexample = example.new_formatter()
     assert fexample.__class__.__name__ == "ExampleFormatter"
 
 
 def test_example_logging(setup):
-    example = notificationforwarder.baseclass.new("example", None, True, True,  {})
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  {})
     logger_name = "notificationforwarder_"+example.name
     logger = logging.getLogger(logger_name)
     assert logger != None
@@ -58,7 +58,7 @@ def test_example_logging(setup):
     logfile = [h.baseFilename for h in logger.handlers if hasattr(h, "baseFilename")][0]
     assert logfile.endswith("notificationforwarder_example.log")
 
-    example = notificationforwarder.baseclass.new("example", "2", True, True,  {})
+    example = notificationforwarder.baseclass.new("example", "2", "example", True, True,  {})
     logger_name = "notificationforwarder_"+example.name+"_"+example.tag
     logger = logging.getLogger(logger_name)
     assert logger != None
@@ -69,7 +69,7 @@ def test_example_logging(setup):
     
 
 def test_example_formatter_format_event(setup):
-    example = notificationforwarder.baseclass.new("example", None, True, True,  {})
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  {})
     fexample = example.new_formatter()
     raw_event = {
         "description": "halo i bims 1 alarm vong naemon her",
@@ -90,7 +90,7 @@ def test_example_forwarder_forward(setup):
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     assert "INFO - i_bims submits" in log
@@ -101,7 +101,7 @@ def test_example_forwarder_forward(setup):
     _setup() # delete logfile
     # we need to reinitialize, because the logger has the (deleted) file
     # still open and further writes would end up in nirvana.
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her again",
     }
@@ -124,7 +124,7 @@ def test_example_forwarder_forward_success(setup):
         "description": "halo i bims 1 alarm vong naemon her",
         "signature": signature,
     }
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     example.forward(eventopts)
     assert os.path.exists(example.signaturefile)
     sig = open(example.signaturefile).read().strip()
@@ -145,7 +145,7 @@ def test_example_forwarder_forward_timeout(setup):
         "description": "halo i bims 1 alarm vong naemon her",
         "signature": signatures[0],
     }
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     # this is the global log, written by the baseclass
@@ -156,7 +156,7 @@ def test_example_forwarder_forward_timeout(setup):
         "description": "halo i bim au 1 alarm vong naemon her",
         "signature": signatures[1],
     }
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     assert "spooled <sum: halo i bim au 1 alarm vong naemon her>" in log
@@ -172,7 +172,7 @@ def test_example_forwarder_forward_timeout(setup):
         "description": "i druecke dem spuelung",
         "signature": signatures[2],
     }
-    example = notificationforwarder.baseclass.new("example", None, True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     assert re.search(r'.*i_bims submits.*i druecke dem spuelung.*', log, re.MULTILINE)

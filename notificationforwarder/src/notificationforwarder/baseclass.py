@@ -25,7 +25,7 @@ MAXAGE = 5
 
 logger = None
 
-def new(target_name, tag, verbose, debug, receiveropts):
+def new(target_name, tag, formatter, verbose, debug, receiveropts):
 
     forwarder_name = target_name + ("_"+tag if tag else "")
     if verbose:
@@ -56,6 +56,7 @@ def new(target_name, tag, verbose, debug, receiveropts):
         if tag:
             instance.tag = tag
         instance.forwarder_name = forwarder_name
+        instance.formatter_name = formatter
         instance.init_paths()
         instance.init_db()
 
@@ -127,8 +128,8 @@ class NotificationForwarder(object):
 
     def new_formatter(self):
         try:
-            module_name = self.__class__.__name__.replace("Forwarder", "").lower()
-            class_name = self.__class__.__name__.replace("Forwarder", "")+"Formatter"
+            module_name = self.formatter_name
+            class_name = self.formatter_name.capitalize()+"Formatter"
             formatter_module = import_module('.formatter', package='notificationforwarder.'+module_name)
             formatter_module.logger = logger
             formatter_class = getattr(formatter_module, class_name)
