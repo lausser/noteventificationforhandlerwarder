@@ -26,7 +26,7 @@ if __name__ == '__main__':
                       dest="livestatus",
                       help='The livestatus port')
     parser.add_argument('--forwarder', '--receiver', action='store',
-                      dest="receiver",
+                      dest="forwarder",
                       help='''The type of recipient or transport forwarder.
 This can be any backend you want, provided
 there is a Python module forwarder.py in the folder
@@ -34,7 +34,7 @@ notificationforwarder/<forwarder> somewhere in your PYTHONPATH.
 Examples are victorops, syslog, servicenow, rabbitmq,...''',
                       default="syslog")
     parser.add_argument('--forwardertag', '--receivertag', action='store',
-                      dest="receivertag",
+                      dest="forwardertag",
                       help='A distinctive string which is added to the logfile',
                       default=None)
     parser.add_argument('--forwarderopt', '--receiveropt', action = type('', (argparse.Action, ),
@@ -43,8 +43,8 @@ Examples are victorops, syslog, servicenow, rabbitmq,...''',
                       default = {},
                       help="""Receiver attributes. These are specific for
 the type of backend. Example for VictorOps:
---receiveropt company_id=...
---receiveropt routing_key=...""")
+--forwarderopt company_id=...
+--forwarderopt routing_key=...""")
     parser.add_argument('--eventopt', action = type('', (argparse.Action, ),
         dict(__call__ = lambda a, p, n, v, o:
             getattr(n, a.dest).update(dict([v.split('=', 1)])))),
@@ -63,16 +63,16 @@ the type of backend. Example for VictorOps:
                       help='Increase the log level to DEBUG',
                       default=False)
 
-    parser._actions[-3].const = lambda args, namespace: args.receiver if args.formatter is None else args.formatter
+    parser._actions[-3].const = lambda args, namespace: args.forwarder if args.formatter is None else args.formatter
 
     args = parser.parse_args()
     try:
-        forwarder = baseclass.new(args.receiver, args.receivertag, args.formatter, args.verbose, args.debug, args.receiveropt)
+        forwarder = baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt)
     except Exception as a:
-        logger_name = "notificationforwarder_"+args.receiver+("_"+args.receivertag if args.receivertag else "")
+        logger_name = "notificationforwarder_"+args.forwarder+("_"+args.forwardertag if args.forwardertag else "")
         logger = logging.getLogger(logger_name)
         traceback.print_exc(file=sys.stdout)
-        logger.critical("there is no class for "+args.receiver)
+        logger.critical("there is no class for "+args.forwarder)
         sys.exit(1)
     
     forwarder.forward(args.eventopt)
