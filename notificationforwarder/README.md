@@ -63,7 +63,7 @@ class MyspecialreceiverFormatter(NotificationFormatter):
         event.payload = json_payload
         event.summary = "this is a one-line summary which will be used to write a log"
 ```
-The class name has to be the argument of the *\-\-receiver* parameter with the first letter in upper case plus "Formatter". It must have a method *format_event*. This method is called with an event object, which has an attribute event.eventopts. This is a dictionary where keys and values are taken from the *\-\-eventopt* parameters of the **$USER1$/notificationforwarder** command. The method shall shall set the attributes *payload* and *summary* of the event object.
+The class name is by default the argument of the *\-\-forwarder* parameter with the first letter in upper case plus "Formatter". An alternative is to use the parameter *\-\-formatter*. The formatter class must have a method *format_event*. This method is called with an event object, which has an attribute *event.eventopts*. This is a dictionary where keys and values are taken from the *\-\-eventopt* parameters of the **$USER1$/notificationforwarder** command. The method shall set the attributes *payload* and *summary* of the event object.
 
 A skeleton for the *forwarder.py* looks like this:
 
