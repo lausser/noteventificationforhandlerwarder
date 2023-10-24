@@ -25,19 +25,19 @@ if __name__ == '__main__':
     parser.add_argument('--livestatus', action='store',
                       dest="livestatus",
                       help='The livestatus port')
-    parser.add_argument('--receiver', action='store',
+    parser.add_argument(i'--forwarder', '--receiver', action='store',
                       dest="receiver",
-                      help='''The type of recipient.
+                      help='''The type of recipient or transport forwarder.
 This can be any backend you want, provided
-there is a Python module <backend>.py in the folder
-notificationforwarder somewhere in your PYTHONPATH.
+there is a Python module forwarder.py in the folder
+notificationforwarder/<forwarder> somewhere in your PYTHONPATH.
 Examples are victorops, syslog, servicenow, rabbitmq,...''',
                       default="syslog")
-    parser.add_argument('--receivertag', action='store',
+    parser.add_argument('--forwardertag', '--receivertag', action='store',
                       dest="receivertag",
                       help='A distinctive string which is added to the logfile',
                       default=None)
-    parser.add_argument('--receiveropt', action = type('', (argparse.Action, ),
+    parser.add_argument('--forwarderopt', '--receiveropt', action = type('', (argparse.Action, ),
         dict(__call__ = lambda a, p, n, v, o:
             getattr(n, a.dest).update(dict([v.split('=', 1)])))),
                       default = {},

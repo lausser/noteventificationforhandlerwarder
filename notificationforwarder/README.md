@@ -26,10 +26,10 @@ Imagine you have a command definition like this:
 define command{
     command_name    notify-service-victorops
     command_line    $USER1$/notificationforwarder \
-                        --receiver myspecialreceiver \
-                        --receiveropt company_id='$_CONTACTCOMPANY_ID$' \
-                        --receiveropt company_key='$_CONTACTCOMPANY_KEY$' \
-                        --receiveropt routing_key='$_CONTACTROUTING_KEY$' \
+                        --forwarder myspecialreceiver \
+                        --forwarderopt company_id='$_CONTACTCOMPANY_ID$' \
+                        --forwarderopt company_key='$_CONTACTCOMPANY_KEY$' \
+                        --forwarderopt routing_key='$_CONTACTROUTING_KEY$' \
 ...
                         --eventopt HOSTNAME='$HOSTNAME$' \
                         --eventopt HOSTSTATE='$HOSTSTATE$' \
@@ -44,13 +44,13 @@ define command{
 Your service notifications should be sent to some ticket tool. The notification script will talk to a REST api and upload a a well-formatted Json payload. Therefore the notifcation framework has two jobs. 
 First, take the event attributes (all the --eventopt arguments) and transform them to a Json structure. Then, upload it with a POST request.
 
-In your OMD site you create a folder *~/local/lib/python/notificationforwarder/myspecialreceiver* and add two files, *formatter.py* and forwarder.py.
+In your OMD site you create a folder *~/local/lib/python/notificationforwarder/myspecialreceiver* and add two files, *formatter.py* and *forwarder.py*.
 A skeleton for the *formatter.py* looks like this:
 
 ```python
 import time
 import os
-from notificationforwarder.baseclass import NotificationFormatter, FormattedEvent
+from notificationforwarder.baseclass import NotificationFormatter
 
 class MyspecialreceiverFormatter(NotificationFormatter):
 
@@ -71,8 +71,7 @@ A skeleton for the *forwarder.py* looks like this:
 import json
 import requests
 import os
-from notificationforwarder.baseclass import NotificationForwarder, NotificationF
-ormatter, timeout
+from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
 class MyspecialreceiverForwarder(NotificationForwarder):
     def __init__(self, opts):
@@ -99,7 +98,7 @@ class MyspecialreceiverForwarder(NotificationForwarder):
         return r.status_code == 200
 ```
 
-Again, the class name has to be the argument of the *\-\-receiver* parameter with the first letter in upper case, but this time with "Forwarder" appended. This class must have a method *submit()*, which gets the event object which was supplied with payload and summary in the formatting step. If submit() returns a False value, the framework will spool the event in a database.
-The next time Naemon is executing the notificationforwarder script for this receiver, it will try to submit the events which have been spooled so far. If the Forwarder class has an optional method *probe()*, it will check if the receiver is now up again before it flushes the spooled events.
+Again, the class name has to be the argument of the *\-\-forwarder* parameter with the first letter in upper case, but this time with "Forwarder" appended. This class must have a method *submit()*, which gets the event object which was supplied with payload and summary in the formatting step. If submit() returns a False value, the framework will spool the event in a database.
+The next time Naemon is executing the notificationforwarder script for this receiver, it will try to submit the events which have been spooled so far. If the Forwarder class has an optional method *probe()*, it will first check if the receiver is now up again before it flushes the spooled events with the *submit()* method.
 
 
