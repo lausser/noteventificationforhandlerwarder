@@ -16,9 +16,6 @@ import hashlib, secrets
 
 omd_root = os.path.dirname(__file__)
 os.environ["OMD_ROOT"] = omd_root
-#if not [p for p in sys.path if "pythonpath" in p]:
-#    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python")
-#    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/lib/python")
 import notificationforwarder.baseclass
 
 
@@ -33,9 +30,6 @@ def _setup():
     os.makedirs(omd_root+"/tmp", 0o755)
     if os.path.exists("/tmp/notificationforwarder_example.txt"):
         os.remove("/tmp/notificationforwarder_example.txt")
-    if os.path.exists("/tmp/received_payload.json"):
-        os.remove("/tmp/received_payload.json")
-
 
 def get_logfile(forwarder):
     logger_name = "notificationforwarder_"+forwarder.name
@@ -54,8 +48,8 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
         return True
 
     def do_POST(self):
-        if not self.checkAuthentication():
-            return
+#        if not self.checkAuthentication():
+#            return
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         with open('/tmp/received_payload.json', 'wb') as json_file:

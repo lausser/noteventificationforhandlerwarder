@@ -3,9 +3,7 @@ import requests
 import os
 from notificationforwarder.baseclass import NotificationForwarder, timeout
 
-
 class WebhookForwarder(NotificationForwarder):
-
     def __init__(self, opts):
         super(self.__class__, self).__init__(opts)
         setattr(self, "url", getattr(self, "url", "http://localhost:12345"))
