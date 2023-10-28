@@ -38,7 +38,6 @@ dependencies = [
 test = [
     "requests",
     "flake8",
-    "unittest",
     "pytest",
     "pytest-cov",
 ]
