@@ -6,6 +6,8 @@ import re
 import shutil
 import hashlib, secrets
 import logging
+os.environ['PYTHONDONTWRITEBYTECODE'] = "true"
+
 
 omd_root = os.path.dirname(__file__)
 os.environ["OMD_ROOT"] = omd_root

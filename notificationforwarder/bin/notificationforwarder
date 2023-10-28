@@ -62,7 +62,7 @@ the type of backend. Example for VictorOps:
                       help='Increase the log level to DEBUG',
                       default=False)
     parser.add_argument('--version', action='version',
-                      version=f'%(prog)%s 2.3')
+                      version=f'%(prog)%s 2.4')
 
     args = parser.parse_args()
     if not hasattr(args, 'formatter'):

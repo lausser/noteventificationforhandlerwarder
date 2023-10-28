@@ -28,7 +28,7 @@ class WebhookForwarder(NotificationForwarder):
     def submit_one(self, event):
         # event.payload = the json payload
         # event.summary = for the log line
-        # event.fowarderopts["headers"] =
+        # event.forwarderopts["headers"] =
         # self.username
         # self.password
         # self.headers = 
@@ -36,16 +36,19 @@ class WebhookForwarder(NotificationForwarder):
             request_params = {}
             request_params["json"] = event.payload
             if self.username and self.password:
-                request_params["auth"] = requests.auth.HTTPBasicAuth(self.usename, self.passwod)
+                request_params["auth"] = requests.auth.HTTPBasicAuth(self.username, self.password)
             if self.headers:
-                if isinstance(headers, str):
-                    # can be --eventopts='{"my-key": "my-value"}'
-                    headers = json.loads(headers)
-                request_params["headers"] = headers
-            if hasattr(event, "forwarderopts") and "headers" in event.fowarderopts:
+                if isinstance(self.headers, str):
+                    # can be --eventopts headers='{"my-key": "my-value"}'
+                    request_params["headers"] = json.loads(self.headers)
+                else:
+                    request_params["headers"] = self.headers
+            if "headers" in event.forwarderopts:
+                if isinstance(event.forwarderopts["headers"], str):
+                    event.forwarderopts["headers"] = json.loads(event.forwarderopts["headers"])
                 if "headers" not in request_params:
                     request_params["headers"] = {}
-                request_params["headers"].update(event.fowarderopts["headers"])
+                request_params["headers"].update(event.forwarderopts["headers"])
 
             response = requests.post(self.url, **request_params)
             if response.status_code == requests.codes.ok:

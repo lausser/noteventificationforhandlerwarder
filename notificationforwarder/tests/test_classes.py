@@ -6,7 +6,7 @@ import shutil
 import hashlib, secrets
 import notificationforwarder.baseclass
 import logging
-
+os.environ['PYTHONDONTWRITEBYTECODE'] = "true"
 
 def _setup():
     omd_root = os.path.dirname(__file__)

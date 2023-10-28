@@ -331,6 +331,7 @@ class FormattedEvent(metaclass=ABCMeta):
         self._eventopts = eventopts
         self._payload = None
         self._summary = None
+        self._forwarderopts = {}
 
     @property
     def eventopts(self):
@@ -359,6 +360,14 @@ class FormattedEvent(metaclass=ABCMeta):
     @summary.setter
     def summary(self, summary):
         self._summary = summary
+
+    @property
+    def forwarderopts(self):
+        return self._forwarderopts
+
+    @forwarderopts.setter
+    def forwarderopts(self, forwarderopts):
+        self._forwarderopts = forwarderopts
 
     def is_complete(self):
         if self._payload == None or self._summary == None:

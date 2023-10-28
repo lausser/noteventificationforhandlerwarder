@@ -8,6 +8,7 @@ import hashlib, secrets
 import logging
 import subprocess
 import hashlib, secrets
+os.environ['PYTHONDONTWRITEBYTECODE'] = "true"
 
 
 omd_root = os.path.dirname(__file__)

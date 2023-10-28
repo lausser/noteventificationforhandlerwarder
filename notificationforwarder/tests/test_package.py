@@ -1,4 +1,7 @@
 import pytest
+import os
+os.environ['PYTHONDONTWRITEBYTECODE'] = "true"
+
 
 def test_import():
     import notificationforwarder.baseclass

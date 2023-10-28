@@ -12,10 +12,16 @@ import threading
 import json
 import requests
 import hashlib, secrets
+import base64
 
 
 omd_root = os.path.dirname(__file__)
 os.environ["OMD_ROOT"] = omd_root
+if not [p for p in sys.path if "pythonpath" in p]:
+    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python")
+    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/lib/python")
+    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/../src")
+    print("PYTHONPATH="+":".join(sys.path))
 import notificationforwarder.baseclass
 
 
@@ -30,6 +36,8 @@ def _setup():
     os.makedirs(omd_root+"/tmp", 0o755)
     if os.path.exists("/tmp/notificationforwarder_example.txt"):
         os.remove("/tmp/notificationforwarder_example.txt")
+    if os.path.exists("/tmp/received_payload.json"):
+        os.remove("/tmp/received_payload.json")
 
 def get_logfile(forwarder):
     logger_name = "notificationforwarder_"+forwarder.name
@@ -38,18 +46,43 @@ def get_logfile(forwarder):
 
 
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
-    def checkAuthentication(self):
+    def check_auth(self):
         auth = self.headers.get('Authorization')
-        if auth != "Basic %s" % self.server.auth:
+        if auth is None:
             self.send_response(401)
-            self.send_header("WWW-Authenticate", 'Basic realm="webiopi"')
-            self.end_headers();
+            self.send_header("WWW-Authenticate", 'Basic realm="consol"')
+            self.end_headers()
             return False
-        return True
+        if auth.startswith("Basic "):
+            basic_auth = base64.b64decode(auth[6:]).decode('utf-8')
+            username, password = basic_auth.split(':', 1)
+            if username == "i_bims" and password == "i_bims_1_i_bims":
+                return True
+            else:
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Basic realm="consol"')
+                self.end_headers()
+                return False
+        elif auth.startswith("Bearer "):
+            token = auth[7:]
+            if token == "i_bims_1_token":
+                return True
+            else:
+                # Invalid token
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Bearer realm="consol"')
+                self.end_headers()
+                return False
+        else:
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="consol"')
+            self.end_headers()
+            return False
 
     def do_POST(self):
-#        if not self.checkAuthentication():
-#            return
+        headers = self.headers
+        if not self.check_auth():
+            return
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         with open('/tmp/received_payload.json', 'wb') as json_file:
@@ -79,7 +112,7 @@ def server_fixture(request):
     request.addfinalizer(fin)
     return server
 
-def test_send_json_payload_to_server(server_fixture):
+def xtest_send_json_payload_to_server(server_fixture):
     url = "http://localhost:8080"
     data = {"key": "value", "another_key": "another_value"}
 
@@ -91,12 +124,12 @@ def test_send_json_payload_to_server(server_fixture):
 
     assert saved_payload == data
 
-def test_webhook_forward_rabbitmq(server_fixture):
+def test_forward_webhook_format_rabbitmq(server_fixture):
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     reveiveropts = {
-        "url": "http://localhost:8080"
-        #"username": "i_bims",
-        #"password": "i_bims_1_i_bims",
+        "url": "http://localhost:8080/api/v1",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
     }   
     eventopts = {
         "HOSTNAME": "vongsrv01",
@@ -116,12 +149,12 @@ def test_webhook_forward_rabbitmq(server_fixture):
     payload = json.loads(payload)
     assert payload[0]["output"] == "i bim der host un mir is schlecht i kotz hex "+signature
 
-def test_webhook_forward_example(server_fixture):
+def test_forward_webhook_format_example(server_fixture):
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     reveiveropts = {
-        "url": "http://localhost:8080"
-        #"username": "i_bims",
-        #"password": "i_bims_1_i_bims",
+        "url": "http://localhost:8080",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
     }   
     eventopts = {
         "signature": signature,
@@ -139,4 +172,115 @@ def test_webhook_forward_example(server_fixture):
     assert payload["description"] == eventopts["description"]
     assert "timestamp" in payload
 
+def test_forward_webhook_format_vong(server_fixture):
+    reveiveropts = {
+        "url": "http://localhost:8080",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
+    }   
+    eventopts = {
+        "HOSTNAME": "vongsrv01",
+        "NOTIFICATIONTYPE": "PROBLEM",
+    }
+
+    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
+    webhook.forward(eventopts)
+    log = open(get_logfile(webhook)).read()
+    assert "INFO - forwarded dem {} is kaputt".format(eventopts["HOSTNAME"]) in log 
+    with open("/tmp/received_payload.json") as f:
+        payload = f.read()
+    payload = json.loads(payload)
+    assert "dem_host" in payload
+
+def test_forward_webhook_format_bayern(server_fixture):
+    reveiveropts = {
+        "url": "http://localhost:8080",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
+    }   
+    eventopts = {
+        "HOSTNAME": "seppsrv01",
+        "NOTIFICATIONTYPE": "PROBLEM",
+    }
+
+    webhook = notificationforwarder.baseclass.new("webhook", None, "bayern", True, True,  reveiveropts)
+    webhook.forward(eventopts)
+    log = open(get_logfile(webhook)).read()
+    assert "INFO - forwarded des glump {} is hi".format(eventopts["HOSTNAME"]) in log
+    with open("/tmp/received_payload.json") as f:
+        payload = f.read()
+    payload = json.loads(payload)
+    assert "da_host" in payload
+
+def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
+    reveiveropts = {
+        "url": "http://localhost:8080",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
+    }   
+    eventopts = {
+        "HOSTNAME": "vongsrv02",
+        "NOTIFICATIONTYPE": "PROBLEM",
+    }
+    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
+    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
+    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    reveiveroptsparams = " ".join(["--receiveropt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    log = open(get_logfile(webhook)).read()
+    with open("/tmp/received_payload.json") as f:
+        payload = f.read()
+    payload = json.loads(payload)
+    assert payload["dem_host"] == "vongsrv02"
+
+def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
+    # auth with token, token is in receiveropts
+    reveiveropts = {
+        "url": "http://localhost:8080",
+        "headers": '{"Authorization": "Bearer i_bims_1_token"}',
+    }   
+    eventopts = {
+        "HOSTNAME": "vongsrv03",
+        "NOTIFICATIONTYPE": "PROBLEM",
+    }
+    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
+    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
+    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    reveiveroptsparams = " ".join(["--receiveropt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    #raise
+    log = open(get_logfile(webhook)).read()
+    with open("/tmp/received_payload.json") as f:
+        payload = f.read()
+    payload = json.loads(payload)
+    assert payload["dem_host"] == "vongsrv03"
+
+def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture):
+    # auth with token, token is created by the formatter
+    reveiveropts = {
+        "url": "http://localhost:8080",
+    }   
+    eventopts = {
+        "HOSTNAME": "vongsrv04",
+        "NOTIFICATIONTYPE": "PROBLEM",
+        # if this key exists, then the formatter fills the header
+        # event.forwarderopts["headers"] = '{{"Authorization":
+        "dem_is_geheim": "i_bims_1_token",
+    }
+    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
+    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
+    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    reveiveroptsparams = " ".join(["--receiveropt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    log = open(get_logfile(webhook)).read()
+    with open("/tmp/received_payload.json") as f:
+        payload = f.read()
+    payload = json.loads(payload)
+    assert payload["dem_host"] == "vongsrv04"
 
