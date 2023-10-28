@@ -59,3 +59,4 @@ jobs:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN_NF }}
         verbose: true
+        packages-dir: /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
