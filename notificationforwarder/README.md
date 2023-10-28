@@ -132,7 +132,6 @@ And this one shows how to set additional headers.
                         --forwarder webhook \
                         --forwarderopt url=https://cm.consol.de/api/v2/crticket \
                         --forwarderopt headers='{"Authentication": "Bearer 0x00hex0der8ase64schlonz", "Max-Livetime": "10"}' \
-                        --forwarderopt username=consol123 \
                         --eventopt HOSTNAME='$HOSTNAME$' \
 ```
 
