@@ -29,6 +29,7 @@ jobs:
         working-directory: ./notificationforwarder
 
     steps:
+    - uses: actions/checkout@v3
     - name: abort if not vn*
       if: ${{ !startsWith(github.event.release.tag_name, 'n') }}
       # if: startsWith geht, bei Negation muss aber die {{{}{}{{{-Schlonzweise genutzt werden
@@ -36,7 +37,6 @@ jobs:
       run: |
         echo "aborting, this is not a notificationforwarder release"
         exit 0
-    - uses: actions/checkout@v3
     - name: Set up Python
       uses: actions/setup-python@v3
       with:
