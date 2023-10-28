@@ -39,7 +39,7 @@ test = [
     "requests",
     "flake8",
     "unittest",
-    "pytest"
+    "pytest",
     "pytest-cov",
 ]
 
