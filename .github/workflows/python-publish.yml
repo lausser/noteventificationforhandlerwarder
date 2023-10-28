@@ -60,10 +60,18 @@ jobs:
       run: |
         cp README.md ..
     - name: Publish package
+      # das hier gibts:
+      # /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
+      # /home/runner/work/<reponame>/<was beim git clone entsteht>
+      # 1 globales working-directory: ./notificationforwarder
+      #   packages-dir: ./notificationforwarder
+      #   sucht nach ls -A './notificationforwarder/*.whl'
+      #   knallt mit IsADirectoryError: [Errno 21] Is a directory: '/github/workspace/notificationforwarder/dist'
+      # 2 versuch mit packages-dir: ./notificationforwarder/dist
       uses: pypa/gh-action-pypi-publish@v1.8.10
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN_NF }}
         verbose: true
-        packages-dir: ./notificationforwarder
+        packages-dir: ./notificationforwarder/dist
         verify-metadata: false
