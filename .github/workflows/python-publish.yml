@@ -55,8 +55,9 @@ jobs:
         find .
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@v1.8.10
+      working-directory: /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN_NF }}
         verbose: true
-        packages-dir: /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
+        #packages-dir: /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
