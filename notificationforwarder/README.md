@@ -101,4 +101,41 @@ class MyspecialreceiverForwarder(NotificationForwarder):
 Again, the class name has to be the argument of the *\-\-forwarder* parameter with the first letter in upper case, but this time with "Forwarder" appended. This class must have a method *submit()*, which gets the event object which was supplied with payload and summary in the formatting step. If submit() returns a False value, the framework will spool the event in a database.
 The next time Naemon is executing the notificationforwarder script for this receiver, it will try to submit the events which have been spooled so far. If the Forwarder class has an optional method *probe()*, it will first check if the receiver is now up again before it flushes the spooled events with the *submit()* method.
 
+## Forwarders/Formatters which come with the module
 
+### WebhookForwarder
+This is a generic class, which is used to upload random json payloads (that's why there is no WebhookFormatter as there are so many possibilities) with a POST request to an Api. The parameters it takes are *url*, *username* and *password* for basic auth, *headers* to add to the post request. The latter can be used for token based authentication.
+
+First the fowarder will make a plain, unauthorized post request.
+```
+    command_line    $USER1$/notificationforwarder \
+                        --forwarder webhook \
+                        --forwarderopt url=https://cm.consol.de/api/v2/crticket \
+                        --eventopt HOSTNAME='$HOSTNAME$' \
+
+```
+
+Second, the same but with basic auth.
+```
+    command_line    $USER1$/notificationforwarder \
+                        --forwarder webhook \
+                        --forwarderopt url=https://cm.consol.de/api/v2/crticket \
+                        --forwarderopt username=lausser \
+                        --forwarderopt username=consol123 \
+                        --eventopt HOSTNAME='$HOSTNAME$' \
+
+```
+
+And this one shows how to set additional headers.
+```
+    command_line    $USER1$/notificationforwarder \
+                        --forwarder webhook \
+                        --forwarderopt url=https://cm.consol.de/api/v2/crticket \
+                        --forwarderopt headers='{"Authentication": "Bearer 0x00hex0der8ase64schlonz", "Max-Livetime": "10"}' \
+                        --forwarderopt username=consol123 \
+                        --eventopt HOSTNAME='$HOSTNAME$' \
+```
+
+What's missing here is *--formatter myownpayload*, where you call a formatter specifically written for the payload format your api wants.
+
+### SyslogForwarder
