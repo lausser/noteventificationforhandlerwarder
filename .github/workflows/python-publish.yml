@@ -66,3 +66,4 @@ jobs:
         password: ${{ secrets.PYPI_API_TOKEN_NF }}
         verbose: true
         packages-dir: ./notificationforwarder
+        verify-metadata: false
