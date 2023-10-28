@@ -27,7 +27,7 @@ jobs:
 
     steps:
     - name: abort if not vn*
-      if: !startsWith(github.event.release.tag_name, 'n')
+      if: ! startsWith(github.event.release.tag_name , 'n')
       run: |
         echo "aborting, this is not a notificationforwarder release"
         exit 0
