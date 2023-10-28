@@ -67,7 +67,7 @@ The class name is by default the argument of the *\-\-forwarder* parameter with 
 
 A skeleton for the *forwarder.py* looks like this:
 
-```
+```python
 import json
 import requests
 import os
