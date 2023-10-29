@@ -104,7 +104,15 @@ The next time Naemon is executing the notificationforwarder script for this rece
 ## Forwarders/Formatters which come with the module
 
 ### WebhookForwarder
+
 This is a generic class, which is used to upload random json payloads (that's why there is no WebhookFormatter as there are so many possibilities) with a POST request to an Api. The parameters it takes are *url*, *username* and *password* for basic auth, *headers* to add to the post request. The latter can be used for token based authentication.
+
+|parameter|description               |default|
+|---------|--------------------------|-------|
+|url      |the url of the api        |-      |
+|username |a username for basic auth |-      |
+|password |a basic auth passwod      |-      |
+|headers  |a string in json format   |-      |
 
 First the fowarder will make a plain, unauthorized post request.
 ```
@@ -138,6 +146,7 @@ And this one shows how to set additional headers.
 What's missing here is *--formatter myownpayload*, where you call a formatter specifically written for the payload format your api wants.
 
 #### Demo setup
+
 Let's configure sending notification to a public REST Api, where you can watch the incoming event live.
 First, open https://webhook.site in your browser and copy the random url you are presented. You need it in the argument *url=* in the following commands. If you don't care if anybody can see your events, then just use [the one from the command definitions](https://webhook.site/#!/3864baed-d861-4e33-a5d6-3d9104d696d2).
 
@@ -207,3 +216,20 @@ Also check the logfile *var/log/notificationforwarder_webhook.log*
 
 
 ### SyslogForwarder
+
+The SyslogForwarder class takes a simple event, where the payload is one line of text. It sends this text to a syslog server. The possible value for *--forwarderopts*  are:
+
+|parameter|description                          |default   |
+|---------|-------------------------------------|----------|
+|server   |the syslog server name or ip address |localhost |
+|port     |the port where the server listens    |514       |
+|protocol |the transport protocol               |udp       |
+|facility |the syslog facility                  |local0    |
+|priority |the syslog priority                  |info      |
+
+There is also a SyslogFormatter, which creates the log line as:
+*host: <HOSTNAME>, service: <SERVICEDESC>, state: <SERVICESTATE>, output: <SERVICEOUTPUT>*
+
+If you want a different format, then copy *lib/python/notificationforwarder/syslog/formatter.py* to *local/lib/python/notificationforwarder/syslog/formatter.py* and modify it like you want. Or, with *--formatter*, you can use whatever formatter is suitable, as long as it's payload attribute consists of a line of text.
+
+
