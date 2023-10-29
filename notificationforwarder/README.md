@@ -48,8 +48,6 @@ In your OMD site you create a folder *~/local/lib/python/notificationforwarder/m
 A skeleton for the *formatter.py* looks like this:
 
 ```python
-import time
-import os
 from notificationforwarder.baseclass import NotificationFormatter
 
 class MyspecialreceiverFormatter(NotificationFormatter):
@@ -68,9 +66,7 @@ The class name is by default the argument of the *\-\-forwarder* parameter with 
 A skeleton for the *forwarder.py* looks like this:
 
 ```python
-import json
 import requests
-import os
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
 class MyspecialreceiverForwarder(NotificationForwarder):
@@ -227,8 +223,8 @@ The SyslogForwarder class takes a simple event, where the payload is one line of
 |facility |the syslog facility                  |local0    |
 |priority |the syslog priority                  |info      |
 
-There is also a SyslogFormatter, which creates the log line as:
-*host: <HOSTNAME>, service: <SERVICEDESC>, state: <SERVICESTATE>, output: <SERVICEOUTPUT>*
+There is also a SyslogFormatter, which creates the log line as:  
+*host: \<HOSTNAME\>, service: \<SERVICEDESC\>, state: \<SERVICESTATE\>, output: \<SERVICEOUTPUT\>*
 
 If you want a different format, then copy *lib/python/notificationforwarder/syslog/formatter.py* to *local/lib/python/notificationforwarder/syslog/formatter.py* and modify it like you want. Or, with *--formatter*, you can use whatever formatter is suitable, as long as it's payload attribute consists of a line of text.
 
