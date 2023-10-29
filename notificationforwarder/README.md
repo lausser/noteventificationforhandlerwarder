@@ -137,4 +137,73 @@ And this one shows how to set additional headers.
 
 What's missing here is *--formatter myownpayload*, where you call a formatter specifically written for the payload format your api wants.
 
+#### Demo setup
+Let's configure sending notification to a public REST Api, where you can watch the incoming event live.
+First, open https://webhook.site in your browser and copy the random url you are presented. You need it in the argument *url=* in the following commands. If you don't care if anybody can see your events, then just use the one in the command definitions.
+
+```
+define command {
+  command_name    notify-service-webhooksite
+  command_line    $USER1$/notificationforwarder \
+                     --forwarder webhook \
+                     --forwarderopt url=https://webhook.site/3864baed-d861-4e33-a5d6-3d9104d696d2 \
+                     --formatter vong \
+                     --eventopt HOSTNAME='$HOSTNAME$' \
+                     --eventopt HOSTSTATE='$HOSTSTATE$' \
+                     --eventopt HOSTADDRESS='$HOSTADDRESS$' \
+                     --eventopt SERVICEDESC='$SERVICEDESC$' \
+                     --eventopt SERVICESTATE='$SERVICESTATE$' \
+                     --eventopt SERVICEOUTPUT='$SERVICEOUTPUT$' \
+                     --eventopt LONGSERVICEOUTPUT='$LONGSERVICEOUTPUT$' \
+                     >> $USER4$/var/log/notificationforwarder_webhook.log 2>&1
+}
+
+define command {
+  command_name    notify-host-webhooksite
+  command_line    $USER1$/notificationforwarder \
+                     --forwarder webhook \
+                     --forwarderopt url=https://webhook.site/3864baed-d861-4e33-a5d6-3d9104d696d2 \
+                     --formatter vong \
+                     --eventopt HOSTNAME='$HOSTNAME$' \
+                     --eventopt HOSTSTATE='$HOSTSTATE$' \
+                     --eventopt HOSTADDRESS='$HOSTADDRESS$' \
+                     --eventopt HOSTOUTPUT='$HOSTOUTPUT$' \
+                     >> $USER4$/var/log/notificationforwarder_webhook.log 2>&1
+}
+```
+
+The forwarder webhook is already builtin, we only need to write the formatter in *~/local/lib/python/notificationforwarder/vong/formatter.py*
+```python
+from notificationforwarder.baseclass import NotificationFormatter
+
+class VongFormatter(NotificationFormatter):
+
+    def format_event(self, event):
+        json_payload = {
+            'greeting': 'Halo i bims 1 eveng vong Naemon her',
+            'host_name': event.eventopts["HOSTNAME"],
+        }
+        if "SERVICEDESC" in event.eventopts:
+            json_payload['service_description'] = event.eventopts['SERVICEDESC']
+            if event.eventopts["SERVICESTATE"] == "WARNING":
+                json_payload['output'] = "dem {} vong {} is schlecht".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
+            elif event.eventopts["SERVICESTATE"] == "CRITICAL":
+                json_payload['output'] = "dem {} vong {} is vol kaputt".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
+            else:
+                json_payload['output'] = "i bim mit dem Serviz {} vong {} voll zufriedn".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
+        else:
+            json_payload['output'] = event.eventopts["HOSTOUTPUT"]
+            if event.eventopts["HOSTSTATE"] == "DOWN":
+                json_payload['output'] = "dem {} is vol kaputt".format(event.eventopts["HOSTNAME"])
+            else:
+                json_payload['output'] = "dem {} is 1 host mid Niceigkeit".format(event.eventopts["HOSTNAME"])
+
+        event.payload = json_payload
+        event.summary = "i hab dem post gepost"
+```
+
+After you added the two notification commands to your default contact (or created a new contact which is assigned to all hosts and services), you can watch the notifications appear on [https://webhook.site](https://webhook.site).
+Also check the logfile *var/log/notificationforwarder_webhook.log*
+
+
 ### SyslogForwarder

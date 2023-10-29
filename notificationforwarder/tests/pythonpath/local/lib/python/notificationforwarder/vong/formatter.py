@@ -1,15 +1,27 @@
-import time
-from notificationforwarder.baseclass import NotificationFormatter, FormattedEvent
+from notificationforwarder.baseclass import NotificationFormatter
 
 class VongFormatter(NotificationFormatter):
 
     def format_event(self, event):
         json_payload = {
-            'formatter': 'vong',
-            'dem_host': event.eventopts["HOSTNAME"],
-            'dem_typ': event.eventopts["NOTIFICATIONTYPE"],
+            'greeting': 'Halo i bims 1 eveng vong Naemon her',
+            'host_name': event.eventopts["HOSTNAME"],
         }
-        if "dem_is_geheim" in event.eventopts:
-            event.forwarderopts["headers"] = '{{"Authorization": "Bearer {}"}}'.format(event.eventopts["dem_is_geheim"])
+        if "SERVICEDESC" in event.eventopts:
+            json_payload['service_description'] = event.eventopts['SERVICEDESC']
+            if event.eventopts["SERVICESTATE"] == "WARNING":
+                json_payload['output'] = "dem {} vong {} is schlecht".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
+            elif event.eventopts["SERVICESTATE"] == "CRITICAL":
+                json_payload['output'] = "dem {} vong {} is vol kaputt".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
+            else:
+                json_payload['output'] = "i bim mit dem Serviz {} vong {} voll zufriedn".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
+        else:
+            json_payload['output'] = event.eventopts["HOSTOUTPUT"]
+            if event.eventopts["HOSTSTATE"] == "DOWN":
+                json_payload['output'] = "dem {} is vol kaputt".format(event.eventopts["HOSTNAME"])
+            else:
+                json_payload['output'] = "dem {} is 1 host mid Niceigkeit".format(event.eventopts["HOSTNAME"])
+
         event.payload = json_payload
-        event.summary = "dem {} is kaputt".format(json_payload["dem_host"])
+        event.summary = "i hab dem post gepost"
+
