@@ -180,17 +180,18 @@ def test_forward_webhook_format_vong(server_fixture):
     }   
     eventopts = {
         "HOSTNAME": "vongsrv01",
+        "HOSTSTATE": "DOWN",
         "NOTIFICATIONTYPE": "PROBLEM",
     }
 
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     webhook.forward(eventopts)
     log = open(get_logfile(webhook)).read()
-    assert "INFO - forwarded dem {} is kaputt".format(eventopts["HOSTNAME"]) in log 
+    assert "INFO - forwarded i hab dem post gepost" in log 
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
-    assert "dem_host" in payload
+    assert "host_name" in payload
 
 def test_forward_webhook_format_bayern(server_fixture):
     reveiveropts = {
@@ -200,6 +201,7 @@ def test_forward_webhook_format_bayern(server_fixture):
     }   
     eventopts = {
         "HOSTNAME": "seppsrv01",
+        "HOSTSTATE": "DOWN",
         "NOTIFICATIONTYPE": "PROBLEM",
     }
 
@@ -220,6 +222,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     }   
     eventopts = {
         "HOSTNAME": "vongsrv02",
+        "HOSTSTATE": "DOWN",
         "NOTIFICATIONTYPE": "PROBLEM",
     }
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
@@ -233,7 +236,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
-    assert payload["dem_host"] == "vongsrv02"
+    assert payload["host_name"] == "vongsrv02"
 
 def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
     # auth with token, token is in receiveropts
@@ -243,6 +246,7 @@ def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
     }   
     eventopts = {
         "HOSTNAME": "vongsrv03",
+        "HOSTSTATE": "DOWN",
         "NOTIFICATIONTYPE": "PROBLEM",
     }
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
@@ -257,15 +261,18 @@ def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
-    assert payload["dem_host"] == "vongsrv03"
+    assert payload["host_name"] == "vongsrv03"
 
 def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture):
     # auth with token, token is created by the formatter
     reveiveropts = {
         "url": "http://localhost:8080",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
     }   
     eventopts = {
         "HOSTNAME": "vongsrv04",
+        "HOSTSTATE": "DOWN",
         "NOTIFICATIONTYPE": "PROBLEM",
         # if this key exists, then the formatter fills the header
         # event.forwarderopts["headers"] = '{{"Authorization":
@@ -282,5 +289,5 @@ def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture)
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
-    assert payload["dem_host"] == "vongsrv04"
+    assert payload["host_name"] == "vongsrv04"
 

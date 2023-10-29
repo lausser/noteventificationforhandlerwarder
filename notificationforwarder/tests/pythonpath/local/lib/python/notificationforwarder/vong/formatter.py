@@ -16,7 +16,6 @@ class VongFormatter(NotificationFormatter):
             else:
                 json_payload['output'] = "i bim mit dem Serviz {} vong {} voll zufriedn".format(event.eventopts['SERVICEDESC'], event.eventopts['HOSTNAME'])
         else:
-            json_payload['output'] = event.eventopts["HOSTOUTPUT"]
             if event.eventopts["HOSTSTATE"] == "DOWN":
                 json_payload['output'] = "dem {} is vol kaputt".format(event.eventopts["HOSTNAME"])
             else:
