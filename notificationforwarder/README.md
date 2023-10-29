@@ -139,7 +139,7 @@ What's missing here is *--formatter myownpayload*, where you call a formatter sp
 
 #### Demo setup
 Let's configure sending notification to a public REST Api, where you can watch the incoming event live.
-First, open https://webhook.site in your browser and copy the random url you are presented. You need it in the argument *url=* in the following commands. If you don't care if anybody can see your events, then just use the one in the command definitions.
+First, open https://webhook.site in your browser and copy the random url you are presented. You need it in the argument *url=* in the following commands. If you don't care if anybody can see your events, then just use [the one from the command definitions](https://webhook.site/#!/3864baed-d861-4e33-a5d6-3d9104d696d2).
 
 ```
 define command {
