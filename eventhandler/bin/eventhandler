@@ -49,10 +49,15 @@ the type of backend. Example for ssh:
 --handleropt ssh_port=...""")
 
 ##
-## ----- the handler runs a command.
-##       the action takes the event. it decides what to do (downtime, attempt, state)
-##       it has knowledge about the handler (ssh, nsc)
-##       it creates a payload with
+##       Step1 is the Decider, has decide()
+##       Step2 is the Executor, has execute() OR Handler, has handle()
+##        responsible for handling the execution of the command based on the decisions made by Step 1
+##       Naemon calls Step1 with eventopts
+##       Step1 calls Step2 with
+##         a command and parameters
+##        it has knowledge about the handler (ssh, nsc)
+###      Step2 runs check_nsc_web, ssh, bash, an api call
+###       nsc gets a hostname, ssh too, --executoropt
 ##       payload.summary = for the log line
 ##       payload.parameters = for the handler
 ##       payload.command?
