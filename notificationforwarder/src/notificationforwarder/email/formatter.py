@@ -11,9 +11,10 @@ class EmailFormatter(NotificationFormatter):
         else:
             event.payload["html"] = self.create_host_html(event)
             event.payload["text"] = self.create_host_text(event)
+        event.payload["subject"] = "thesubtschek"
         event.summary = "mail"
 
-    def create_service_html(event):
+    def create_service_html(self, event):
         email_template = """
         <html>
         <body>
@@ -29,7 +30,7 @@ class EmailFormatter(NotificationFormatter):
         }
         return template.render(data)
 
-    def create_host_html(event):
+    def create_host_html(self, event):
         email_template = """
         <html>
         <body>
@@ -43,7 +44,7 @@ class EmailFormatter(NotificationFormatter):
         }
         return template.render(data)
 
-    def create_host_text(event):
+    def create_host_text(self, event):
         email_template = """
 SUBJECT: *** {{ NOTIFICATIONTYPE }} *** {{ HOSTNAME }} is {{ HOSTSTATE }}
 TO: {{ CONTACTEMAIL }}
@@ -59,7 +60,7 @@ Content-Transfer-Encoding: 8bit
 - State:       {{ HOSTSTATE }}
 - Date:        {{ SHORTDATETIME }}
 - Output:      {{ HOSTOUTPUT }}
-{%+ LONGHOSTOUTPUT|replace('\\\n', "\n") %}
+{{ LONGHOSTOUTPUT }}
 {% if NOTIFICATIONTYPE == 'ACKNOWLEDGEMENT' %}
 ----------------------------------
 - Author:      {{ ACKAUTHOR }}
@@ -87,7 +88,7 @@ Content-Transfer-Encoding: 8bit
         }
         return template.render(data)
 
-    def create_service_text(event):
+    def create_service_text(self, event):
         email_template = """
 SUBJECT: *** {{ NOTIFICATIONTYPE }} *** {{ HOSTNAME }} / {{ SERVICEDESC }} is {{ SERVICESTATE }}
 TO: {{ CONTACTEMAIL }}
@@ -104,7 +105,7 @@ Content-Transfer-Encoding: 8bit
 - State:       {{ SERVICESTATE }}
 - Date:        {{ SHORTDATETIME }}
 - Output:      {{ SERVICEOUTPUT }}
-{%+ LONGSERVICEOUTPUT|replace('\\\n', "\n") %}
+{{ LONGSERVICEOUTPUT }}
 {% if NOTIFICATIONTYPE == 'ACKNOWLEDGEMENT' %}
 ----------------------------------
 - Author:      {{ ACKAUTHOR }}

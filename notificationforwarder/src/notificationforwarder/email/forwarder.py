@@ -1,6 +1,8 @@
 import getpass
 import smtplib
+import logging
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
 class EmailForwarder(NotificationForwarder):
@@ -8,7 +10,7 @@ class EmailForwarder(NotificationForwarder):
         super(self.__class__, self).__init__(opts)
         setattr(self, "smtp_server", getattr(self, "smtp_server", "localhost"))
         setattr(self, "smtp_port", int(getattr(self, "smtp_port", 25)))
-        setattr(self, "sender", getattr(self, "sender", None))
+        setattr(self, "sender", getattr(self, "sender", getpass.getuser()))
         setattr(self, "recipient", getattr(self, "recipient", None))
 
     @timeout(30)
@@ -24,7 +26,7 @@ class EmailForwarder(NotificationForwarder):
                 message.attach(MIMEText(event.payload["text"], "text"))
             else:
                 message.attach(MIMEText("formatter must return html or text", "text"))
-            server = smtplib.SMTP(smtp_server, smtp_port)
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.sendmail(self.sender, self.recipient, message.as_string())
             server.quit()
             return True
