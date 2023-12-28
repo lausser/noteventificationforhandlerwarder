@@ -189,7 +189,7 @@ class NotificationForwarder(object):
             if self.num_spooled_events() and self.probe():
                 self.flush()
         except Exception as e:
-            logger.critical("flush probe failed with exception <{}>")
+            logger.critical("flush probe failed with exception <{}>".format(str(e)))
 
         format_exception_msg = None
         try:
