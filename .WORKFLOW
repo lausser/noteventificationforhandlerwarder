@@ -6,5 +6,6 @@ notificationforwarder:
  git commit
 2) add tag which will become release
  git tag vn2.4.0.1
-3) git push --follow-tags
- will push commits and tags
+3) push commits and tags
+ git push && git push --tags
+ (--follow-tags only pushes annotated tags)
