@@ -8,6 +8,7 @@ import functools
 import errno
 import fcntl
 import time
+import re
 try:
     import simplejson as json
 except ImportError:
@@ -160,6 +161,17 @@ class NotificationForwarder(object):
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
         raw_event["omd_originating_timestamp"] = int(time.time())
         try:
+            empty_macros = []
+            for macro in raw_event:
+                # remove all the macros which have not been given a value
+                # by the nagios config
+                raw_event[macro] = str(raw_event[macro])
+                if raw_event[macro] == "$":
+                    empty_macros.append(macro)
+                elif re.search(r'^\$\w+\$', raw_event[macro]):
+                    empty_macros.append(macro)
+            for macro in empty_macros:
+                del raw_event[macro]
             formatted_event = FormattedEvent(raw_event)
             instance.format_event(formatted_event)
             return formatted_event
