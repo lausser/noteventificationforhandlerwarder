@@ -1,5 +1,6 @@
 import json
 import requests
+requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 import os
 from notificationforwarder.baseclass import NotificationForwarder, timeout
 
@@ -9,6 +10,7 @@ class WebhookForwarder(NotificationForwarder):
         setattr(self, "url", getattr(self, "url", "http://localhost:12345"))
         setattr(self, "username", getattr(self, "username", None))
         setattr(self, "password", getattr(self, "password", None))
+        setattr(self, "insecure", getattr(self, "insecure", "yes"))
         setattr(self, "headers", getattr(self, "headers", None))
 
     @timeout(30)
@@ -49,6 +51,8 @@ class WebhookForwarder(NotificationForwarder):
                 if "headers" not in request_params:
                     request_params["headers"] = {}
                 request_params["headers"].update(event.forwarderopts["headers"])
+            if self.insecure == "yes":
+                request_params["verify"] = False
 
             response = requests.post(self.url, **request_params)
             if response.status_code == requests.codes.ok:
