@@ -53,6 +53,12 @@ class WebhookForwarder(NotificationForwarder):
                 request_params["headers"].update(event.forwarderopts["headers"])
             if self.insecure == "yes":
                 request_params["verify"] = False
+            if "headers" not in request_params:
+                request_params["headers"] = {
+                    "Content-type": "application/json"
+                }
+            elif "Content-type" not in request_params["headers"]:
+                request_params["headers"]["Content-type"] = "application/json"
 
             response = requests.post(self.url, **request_params)
             if response.status_code == requests.codes.ok:
