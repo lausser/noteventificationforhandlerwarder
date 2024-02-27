@@ -182,7 +182,13 @@ class NotificationForwarder(object):
     def forward(self, raw_event):
         try:
             formatted_event = self.format_event(raw_event)
-            if formatted_event and not formatted_event.is_complete():
+            if formatted_event.is_discarded:
+                if not formatted_event.is_discarded_silently:
+                    if not formatted_event.summary:
+                        formatted_event.summary = str(raw_event)
+                    logger.info("discarded {}".format(formatted_event.summary))
+                formatted_event = None
+            elif formatted_event and not formatted_event.is_complete():
                 logger.critical("a formatted event {} must have the attributes payload and summary".format(formatted_event.__class__.__name__))
                 formatted_event = None
         except Exception as e:
@@ -344,6 +350,8 @@ class FormattedEvent(metaclass=ABCMeta):
         self._payload = None
         self._summary = None
         self._forwarderopts = {}
+        self._discarded = False
+        self._discarded_silently = True
 
     @property
     def eventopts(self):
@@ -381,8 +389,19 @@ class FormattedEvent(metaclass=ABCMeta):
     def forwarderopts(self, forwarderopts):
         self._forwarderopts = forwarderopts
 
+    @property
+    def is_discarded_silently(self):
+        return self._discarded_silently
+
+    @property
+    def is_discarded(self):
+        return self._discarded
+
     def is_complete(self):
         if self._payload == None or self._summary == None:
             return False
         return True
 
+    def discard(self, silently=True):
+        self._discarded = True
+        self._discarded_silently = True if silently else False
