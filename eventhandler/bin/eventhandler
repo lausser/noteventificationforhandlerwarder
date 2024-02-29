@@ -26,31 +26,44 @@ if __name__ == '__main__':
             getattr(n, a.dest).update(dict([v.split('=', 1)])))), 
                       default = {},
                       help="Naemon runtime attributes")
-    parser.add_argument('--handler', action='store',
-                      dest="handler",
+    parser.add_argument('--decider', action='store',
+                      dest="decider",
+                      help='''The type of decision finder.
+This can be any decider you want, provided
+there is a Python module <decider>.py in the folder
+eventhandler somewhere in your PYTHONPATH.
+Examples are default_nagios...''',
+                      default="default_nagios")
+    parser.add_argument('--decideropt', action = type('', (argparse.Action, ),
+        dict(__call__ = lambda a, p, n, v, o:
+            getattr(n, a.dest).update(dict([v.split('=', 1)])))),
+                      default = {},
+                      help="""Decider attributes.""")
+    parser.add_argument('--runner', action='store',
+                      dest="runner",
                       help='''The type of script.
 This can be any backend you want, provided
 there is a Python module <backend>.py in the folder
 eventhandler somewhere in your PYTHONPATH.
 Examples are ssh, nsc_web, bash...''',
                       default="ssh")
-    parser.add_argument('--handlertag', action='store',
-                      dest="handlertag",
+    parser.add_argument('--runnertag', action='store',
+                      dest="runnertag",
                       help='A distinctive string which is added to the logfile',
                       default=None)
-    parser.add_argument('--handleropt', action = type('', (argparse.Action, ),
+    parser.add_argument('--runneropt', action = type('', (argparse.Action, ),
         dict(__call__ = lambda a, p, n, v, o:
             getattr(n, a.dest).update(dict([v.split('=', 1)])))),
                       default = {},
-                      help="""Handler attributes. These are specific for
+                      help="""Runner attributes. These are specific for
 the type of backend. Example for ssh:
---handleropt ssh_user=...
---handleropt ssh_identity=...
---handleropt ssh_port=...""")
+--runneropt ssh_user=...
+--runneropt ssh_identity=...
+--runneropt ssh_port=...""")
 
 ##
 ##       Step1 is the Decider, has decide()
-##       Step2 is the Executor, has execute() OR Handler, has handle()
+##       Step2 is the Runner, has run() OR Handler, has handle()
 ##        responsible for handling the execution of the command based on the decisions made by Step 1
 ##       Naemon calls Step1 with eventopts
 ##       Step1 calls Step2 with
