@@ -8,7 +8,7 @@ import sys
 sys.dont_write_bytecode = True
 from coshsh.util import setup_logging
 from eventhandler import baseclass
-from notificationforwarder import basclass as naseclass
+from notificationforwarder import baseclass as f_baseclass
 import traceback
 
 
@@ -122,15 +122,15 @@ will be sent to the forwarder like an alarm notification.""")
         args.formatter = args.forwarder
 
     try:
-        handler = eventhandler.new(args.handler, args.handlertag, args.verbose, args.debug, args.handleropt)
+        handler = eventhandler.new(args.runner, args.runnertag, args.verbose, args.debug, args.runneropts):
     except Exception as a:
-        logger = logging.getLogger(args.handler)
+        logger = logging.getLogger(args.runner)
         traceback.print_exc(file=sys.stdout)
-        logger.critical("there is no class for "+args.handler)
+        logger.critical("there is no class for "+args.runner)
         sys.exit(1)
     if args.forwarder:
         try:
-            handler.forwarder = faseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt)
+            runner.forwarder = f_baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt)
         except Exception as a:
             logger_name = "notificationforwarder_"+args.forwarder+("_"+args.forwardertag if args.forwardertag else "")
             logger = logging.getLogger(logger_name)
@@ -139,5 +139,5 @@ will be sent to the forwarder like an alarm notification.""")
             logger.critical("there is no class for forwarder {} and formatter {}".format(args.forwarder, args.formatter))
             sys.exit(1)
     
-    handler.handle(args.eventopt)
+    runner.handle(args.eventopt)
 
