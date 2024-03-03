@@ -72,28 +72,25 @@ def test_example_decider_prepare_event(setup):
     fexample = example.new_decider()
     raw_event = {
         "description": "halo i bims 1 alarm vong naemon her",
+        "timestamp": time.time(),
     }
     event = eventhandler.baseclass.DecidedEvent(raw_event)
     assert event.eventopts["description"] == "halo i bims 1 alarm vong naemon her"
     fexample.decide_and_prepare(event)
-    print(fexample)
-    print(fexample.__dict__)
     assert event.summary == "halo i bims 1 alarm vong naemon her und i schmeis mi weg"
     assert event.payload["cmd"] == "echo"
     assert event.payload["parameters"] == "halo i bims 1 alarm vong naemon her"
-    assert event.payload["timestamp"] == pytest.approx(time.time(), abs=5)
 
 
-def test_example_runner_forward(setup):
-    reveiveropts = {
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
+def test_example_runner_run(setup):
+    runneropts = {
+        "path": "/tmp",
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    example = eventhandler.baseclass.new("example", None, "example", True, True,  reveiveropts)
-    example.forward(eventopts)
+    example = eventhandler.baseclass.new("example", None, "example", True, True,  runneropts)
+    example.run(eventopts)
     log = open(get_logfile(example)).read()
     assert "INFO - i_bims submits" in log
     assert "'description': 'halo i bims 1 alarm vong naemon her'" in log

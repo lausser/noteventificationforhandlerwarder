@@ -117,31 +117,12 @@ class EventhandlerRunner(object):
 
     def decide_and_prepare_event(self, raw_event):
         instance = self.new_decider()
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        print("!!111 {}".format(raw_event))
-        raise
         if not "omd_site" in raw_event:
             raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
         raw_event["omd_originating_host"] = socket.gethostname()
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
         raw_event["omd_originating_timestamp"] = int(time.time())
-        print("!!222 {}".format(raw_event))
         try:
-            print("!!333 {}".format(raw_event))
             decided_event = DecidedEvent(raw_event)
             instance.decide_and_prepare(decided_event)
             return decided_event

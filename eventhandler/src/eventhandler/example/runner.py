@@ -6,5 +6,5 @@ class ExampleRunner(EventhandlerRunner):
         super(self.__class__, self).__init__(opts)
         setattr(self, "username", getattr(self, "username", "guest"))
 
-    def run(self):
+    def run(self, event):
         pass
