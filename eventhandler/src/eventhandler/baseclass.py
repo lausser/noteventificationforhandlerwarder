@@ -117,12 +117,31 @@ class EventhandlerRunner(object):
 
     def decide_and_prepare_event(self, raw_event):
         instance = self.new_decider()
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        print("!!111 {}".format(raw_event))
+        raise
         if not "omd_site" in raw_event:
             raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
         raw_event["omd_originating_host"] = socket.gethostname()
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
         raw_event["omd_originating_timestamp"] = int(time.time())
+        print("!!222 {}".format(raw_event))
         try:
+            print("!!333 {}".format(raw_event))
             decided_event = DecidedEvent(raw_event)
             instance.decide_and_prepare(decided_event)
             return decided_event
@@ -133,10 +152,18 @@ class EventhandlerRunner(object):
     def run(self, raw_event):
         try:
             decided_event = self.decide_and_prepare_event(raw_event)
-            if decided_event and not decided_event.is_complete():
+            print("decided_event is {}".format(decided_event))
+            if decided_event.is_discarded:
+                if not decided_event.is_discarded_silently:
+                    if not decided_event.summary:
+                        decided_event.summary = str(raw_event)
+                    logger.info("discarded {}".format(decided_event.summary))
+                formatted_event = None
+            elif decided_event and not decided_event.is_complete():
                 logger.critical("a decided event {} must have the attributes payload and summary".format(decided_event.__class__.__name__))
                 decided_event = None
         except Exception as e:
+            print("ARSCH")
             try:
                 decided_event
             except NameError:
@@ -199,6 +226,8 @@ class DecidedEvent(metaclass=ABCMeta):
         self._payload = None
         self._summary = None
         self._runneropts = {}
+        self._discarded = False
+        self._discarded_silently = True
 
     @property
     def eventopts(self):
@@ -240,4 +269,21 @@ class DecidedEvent(metaclass=ABCMeta):
         if self._payload == None or self._summary == None:
             return False
         return True
+
+    @property
+    def is_discarded_silently(self):
+        return self._discarded_silently
+
+    @property
+    def is_discarded(self):
+        return self._discarded
+        
+    def is_complete(self): 
+        if self._payload == None or self._summary == None:
+            return False
+        return True
+        
+    def discard(self, silently=True):
+        self._discarded = True
+        self._discarded_silently = True if silently else False
 

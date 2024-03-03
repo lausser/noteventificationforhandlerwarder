@@ -78,8 +78,9 @@ def test_example_decider_prepare_event(setup):
     fexample.decide_and_prepare(event)
     print(fexample)
     print(fexample.__dict__)
-    assert event.summary == "sum: halo i bims 1 alarm vong naemon her"
-    assert event.payload["description"] == "halo i bims 1 alarm vong naemon her"
+    assert event.summary == "halo i bims 1 alarm vong naemon her und i schmeis mi weg"
+    assert event.payload["cmd"] == "echo"
+    assert event.payload["parameters"] == "halo i bims 1 alarm vong naemon her"
     assert event.payload["timestamp"] == pytest.approx(time.time(), abs=5)
 
 
