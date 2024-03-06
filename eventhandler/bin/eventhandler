@@ -32,8 +32,7 @@ if __name__ == '__main__':
 This can be any decider you want, provided
 there is a Python module <decider>.py in the folder
 eventhandler somewhere in your PYTHONPATH.
-Examples are default_nagios...''',
-                      default="default_nagios")
+Examples are default_nagios...''',)
     parser.add_argument('--decideropt', action = type('', (argparse.Action, ),
         dict(__call__ = lambda a, p, n, v, o:
             getattr(n, a.dest).update(dict([v.split('=', 1)])))),
@@ -45,8 +44,7 @@ Examples are default_nagios...''',
 This can be any backend you want, provided
 there is a Python module <backend>.py in the folder
 eventhandler somewhere in your PYTHONPATH.
-Examples are ssh, nsc_web, bash...''',
-                      default="ssh")
+Examples are ssh, nsc_web, bash...''')
     parser.add_argument('--runnertag', action='store',
                       dest="runnertag",
                       help='A distinctive string which is added to the logfile',
@@ -118,11 +116,15 @@ will be sent to the forwarder like an alarm notification.""")
                       version=f'%(prog)%s 0.0')
 
     args = parser.parse_args()
+    if not any(vars(args).values()):
+        parser.print_help()
+        parser.exit()
+
     if hasattr(args, 'forwarder') and not hasattr(args, 'formatter'):
         args.formatter = args.forwarder
 
     try:
-        handler = eventhandler.new(args.runner, args.runnertag, args.verbose, args.debug, args.runneropts):
+        runner = baseclass.new(args.runner, args.runnertag, args.decider, args.verbose, args.debug, args.runneropt)
     except Exception as a:
         logger = logging.getLogger(args.runner)
         traceback.print_exc(file=sys.stdout)

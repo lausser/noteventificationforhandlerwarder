@@ -7,6 +7,7 @@ import functools
 import errno
 import fcntl
 import time
+import subprocess
 try:
     import simplejson as json
 except ImportError:
@@ -41,7 +42,7 @@ def new(target_name, tag, decider, verbose, debug, runneropts):
             module_name, class_name = target_name.rsplit('.', 1)
         else:
             module_name = target_name
-            class_name = target_name.capitalize()+"Runner"
+            class_name = "".join([x.title() for x in target_name.split("_")])+"Runner"
         runner_module = import_module('eventhandler.'+module_name+'.runner', package='eventhandler.'+module_name)
         runner_class = getattr(runner_module, class_name)
 
@@ -88,6 +89,9 @@ def timeout(seconds, error_message="Timeout"):
     return decorator
 
 
+class EventhandlerPythonRunner(object):
+    pass
+
 class EventhandlerRunner(object):
     """This is the base class where all Runners inherit from"""
     __metaclass__ = ABCMeta # replace with ...BaseClass(metaclass=ABCMeta):
@@ -100,7 +104,7 @@ class EventhandlerRunner(object):
     def new_decider(self):
         try:
             module_name = self.decider_name
-            class_name = self.decider_name.capitalize()+"Decider"
+            class_name = "".join([x.title() for x in self.decider_name.split("_")])+"Decider"
             decider_module = import_module('.decider', package='eventhandler.'+module_name)
             decider_module.logger = logger
             decider_class = getattr(decider_module, class_name)
@@ -122,57 +126,73 @@ class EventhandlerRunner(object):
         raw_event["omd_originating_host"] = socket.gethostname()
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
         raw_event["omd_originating_timestamp"] = int(time.time())
+        raw_event["omd_originating_timestamp"] = int(time.time())
         try:
             decided_event = DecidedEvent(raw_event)
+            setattr(instance, "runner", self.runner_name[:-len("_"+self.tag)] if hasattr(self, "tag") and self.runner_name.endswith("_"+self.tag) else self.runner_name)
             instance.decide_and_prepare(decided_event)
             return decided_event
         except Exception as e:
             logger.critical("when deciding based on this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
             return None
 
-    def run(self, raw_event):
+    def handle(self, raw_event):
         try:
             decided_event = self.decide_and_prepare_event(raw_event)
-            print("decided_event is {}".format(decided_event))
             if decided_event.is_discarded:
                 if not decided_event.is_discarded_silently:
                     if not decided_event.summary:
                         decided_event.summary = str(raw_event)
-                    logger.info("discarded {}".format(decided_event.summary))
-                formatted_event = None
+                    logger.info("discarded: {}".format(decided_event.summary))
+                decided_event = None
             elif decided_event and not decided_event.is_complete():
                 logger.critical("a decided event {} must have the attributes payload and summary".format(decided_event.__class__.__name__))
                 decided_event = None
         except Exception as e:
-            print("ARSCH")
             try:
                 decided_event
             except NameError:
                 logger.critical("raw event {} caused error {}".format(str(raw_event), str(e)))
             decided_event = None
         if decided_event:
+            self.overwrite_attributes(decided_event.payload)
             success = self.run_decided(decided_event)
+
+    def overwrite_attributes(self, payload):
+        # paload can overwrite runneropts
+        for k in payload:
+            if hasattr(self, k):
+                setattr(self, k, payload[k])
 
     def run_decided(self, decided_event):
         decide_exception_msg = None
+        stdout, stderr, exit_code = None, None, 0
         try:
             if decided_event == None:
                 success = True
             else:
-                success = self.run(decided_event)
+                command = self.run(decided_event)
+                logger.debug(f"command is {command}")
+                proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = proc.communicate()
+                exit_code = proc.wait()
+                success = True if exit_code == 0 else False
         except Exception as e:
             success = False
             decide_exception_msg = str(e)
 
         if success:
             if self.baseclass_logs_summary:
-                logger.info("ran {}".format(decided_event.summary))
+                logger.info("{}".format(decided_event.summary))
+                logger.debug("stdout {}, stderr {}".format(stdout if stdout else "", stderr if stderr else ""))
             return True
         else:
-            if decide_exception_msg:
-                logger.critical("run failed with exception <{}>, event was <{}>".format(format_exception_msg, decided_event.summary))
+            if stderr:
+                logger.critical("run failed: stdout {}, stderr {}, event {}".format(stdout if stdout else "", stderr if stderr else "", decided_event.summary))
+            elif decide_exception_msg:
+                logger.critical("run failed: exception <{}>, event was <{}>".format(decide_exception_msg, decided_event.summary))
             elif self.baseclass_logs_summary:
-                logger.warning("run failed for {}".format(decided_event.summary))
+                logger.critical("run failed for {}".format(decided_event.summary))
             return False
 
 
@@ -204,8 +224,11 @@ class EventhandlerDecider(metaclass=ABCMeta):
 class DecidedEvent(metaclass=ABCMeta):
     def __init__(self, eventopts):
         self._eventopts = eventopts
+        for k in self._eventopts:
+            if isinstance(self._eventopts[k], str) and self._eventopts[k].isdigit():
+                self._eventopts[k] = int(self._eventopts[k])
         self._payload = None
-        self._summary = None
+        self._summary = str(self._eventopts)
         self._runneropts = {}
         self._discarded = False
         self._discarded_silently = True

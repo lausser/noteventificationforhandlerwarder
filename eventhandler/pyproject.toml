@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling", "coshsh"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "src/**/*.py",
+    "/tests",
+]
+exclude = [
+    "__pacache__/",
+    "**/.pyc",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eventhandler"]
+
+[project]
+name = "omdeventhandler"
+version = "0.1"
+authors = [
+  { name="Gerhard Lausser", email="lausser@yahoo.com" },
+]
+description = "A framework for event handlers for OMD"
+readme = "README.md"
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "coshsh",
+    "jinja2",
+]
+
+[project.optional-dependencies]
+test = [
+    "requests",
+    "flake8",
+    "pytest",
+    "pytest-cov",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/lausser/noteventificationforhandlerwarder"
+"Bug Tracker" = "https://github.com/lausser/noteventificationforhandlerwarder/issues"
+
+[tool.pytest.ini_options]
+addopts = "-ra -q --import-mode=importlib"
+pythonpath = [
+    "src/"
+]
+testpaths = [
+    "tests",
+]
