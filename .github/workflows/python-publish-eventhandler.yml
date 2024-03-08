@@ -6,14 +6,14 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Upload notificationforwarder Python Package
+name: Upload eventhandler Python Package
 
 on:
   release:
     types: [published]
   # eigentlich sollte das release genuegen, tut es aber nicht
   workflow_run:
-    workflows: [Create Release from v-Tag]
+    workflows: [Create e-Release from v-Tag]
     types:
       - completed
 
@@ -29,16 +29,16 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./notificationforwarder
+        working-directory: ./eventhandler
 
     steps:
     - uses: actions/checkout@v3
-    - name: abort if not vn*
-      if: ${{ !startsWith(github.event.release.tag_name, 'n') }}
+    - name: abort if not ve*
+      if: ${{ !startsWith(github.event.release.tag_name, 'e') }}
       # if: startsWith geht, bei Negation muss aber die {{{}{}{{{-Schlonzweise genutzt werden
-      # if: ! startsWith(github.event.release.tag_name, 'n')
+      # if: ! startsWith(github.event.release.tag_name, 'e')
       run: |
-        echo "aborting, this is not a notificationforwarder release"
+        echo "aborting, this is not an eventhandler release"
         exit 0
     - name: Set up Python
       uses: actions/setup-python@v3
@@ -61,17 +61,17 @@ jobs:
         cp README.md ..
     - name: Publish package
       # das hier gibts:
-      # /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
+      # /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/eventhandler
       # /home/runner/work/<reponame>/<was beim git clone entsteht>
-      # 1 globales working-directory: ./notificationforwarder
-      #   packages-dir: ./notificationforwarder
-      #   sucht nach ls -A './notificationforwarder/*.whl'
-      #   knallt mit IsADirectoryError: [Errno 21] Is a directory: '/github/workspace/notificationforwarder/dist'
-      # 2 versuch mit packages-dir: ./notificationforwarder/dist
+      # 1 globales working-directory: ./eventhandler
+      #   packages-dir: ./eventhandler
+      #   sucht nach ls -A './eventhandler/*.whl'
+      #   knallt mit IsADirectoryError: [Errno 21] Is a directory: '/github/workspace/eventhandler/dist'
+      # 2 versuch mit packages-dir: ./eventhandler/dist
       uses: pypa/gh-action-pypi-publish@v1.8.10
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN_NF }}
         verbose: true
-        packages-dir: ./notificationforwarder/dist
+        packages-dir: ./eventhandler/dist
         verify-metadata: false

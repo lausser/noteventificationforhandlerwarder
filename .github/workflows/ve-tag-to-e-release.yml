@@ -1,9 +1,9 @@
 on:
   push:
     tags:
-      - 'vn*' # trigger this when a tag starting with v is pushed
+      - 've*' # trigger this when a tag starting with v is pushed
 
-name: Create Release from v-Tag
+name: Create e-Release from v-Tag
 
 jobs:
   build:

@@ -1,0 +1,77 @@
+# This workflow will upload a Python Package using Twine when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Upload notificationforwarder Python Package
+
+on:
+  release:
+    types: [published]
+  # eigentlich sollte das release genuegen, tut es aber nicht
+  workflow_run:
+    workflows: [Create n-Release from v-Tag]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+env:
+  DEBUG: 1
+
+jobs:
+  deploy:
+
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./notificationforwarder
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: abort if not vn*
+      if: ${{ !startsWith(github.event.release.tag_name, 'n') }}
+      # if: startsWith geht, bei Negation muss aber die {{{}{}{{{-Schlonzweise genutzt werden
+      # if: ! startsWith(github.event.release.tag_name, 'n')
+      run: |
+        echo "aborting, this is not a notificationforwarder release"
+        exit 0
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+        pip install wheel
+        pip install coshsh
+        pip install jinja2
+    - name: Build package
+      run: |
+        python -m build
+        pwd
+        find .
+    - name: README einshoch, weil gh-action-pypi-publish anscheinend working-directory ignoriert
+      run: |
+        cp README.md ..
+    - name: Publish package
+      # das hier gibts:
+      # /home/runner/work/noteventificationforhandlerwarder/noteventificationforhandlerwarder/notificationforwarder
+      # /home/runner/work/<reponame>/<was beim git clone entsteht>
+      # 1 globales working-directory: ./notificationforwarder
+      #   packages-dir: ./notificationforwarder
+      #   sucht nach ls -A './notificationforwarder/*.whl'
+      #   knallt mit IsADirectoryError: [Errno 21] Is a directory: '/github/workspace/notificationforwarder/dist'
+      # 2 versuch mit packages-dir: ./notificationforwarder/dist
+      uses: pypa/gh-action-pypi-publish@v1.8.10
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN_NF }}
+        verbose: true
+        packages-dir: ./notificationforwarder/dist
+        verify-metadata: false
