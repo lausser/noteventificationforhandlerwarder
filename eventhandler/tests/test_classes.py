@@ -1,4 +1,5 @@
 import pytest
+import sys
 import os
 import re
 import time
@@ -7,6 +8,15 @@ import hashlib, secrets
 import eventhandler.baseclass
 import logging
 os.environ['PYTHONDONTWRITEBYTECODE'] = "true"
+
+
+omd_root = os.path.dirname(__file__)
+os.environ["OMD_ROOT"] = omd_root
+if not [p for p in sys.path if "pythonpath" in p]:
+    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python")
+    sys.path.append(os.environ["OMD_ROOT"]+"/pythonpath/lib/python")
+import eventhandler.baseclass
+
 
 def _setup():
     omd_root = os.path.dirname(__file__)
@@ -90,8 +100,11 @@ def test_example_runner_run(setup):
         "description": "halo i bims 1 alarm vong naemon her",
     }
     example = eventhandler.baseclass.new("example", None, "example", True, True,  runneropts)
-    example.run(eventopts)
+    print(example.__dict__)
+    print(sys.path)
+    example.handle(eventopts)
     log = open(get_logfile(example)).read()
+    print(log)
     assert "INFO - i_bims submits" in log
     assert "'description': 'halo i bims 1 alarm vong naemon her'" in log
     # this is the global log, written by the baseclass
