@@ -172,6 +172,8 @@ class EventhandlerRunner(object):
                 success = True
             else:
                 command = self.run(decided_event)
+                if not command:
+                    raise Exception("runner did not return a command")
                 logger.debug(f"command is {command}")
                 proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 stdout, stderr = proc.communicate()
@@ -192,7 +194,7 @@ class EventhandlerRunner(object):
             elif decide_exception_msg:
                 logger.critical("run failed: exception <{}>, event was <{}>".format(decide_exception_msg, decided_event.summary))
             elif self.baseclass_logs_summary:
-                logger.critical("run failed for {}".format(decided_event.summary))
+                logger.critical("run failed: stdout {}, stderr {}, exitcode {}, event {}".format(stdout if stdout else "", stderr if stderr else "", exit_code, decided_event.summary))
             return False
 
 
