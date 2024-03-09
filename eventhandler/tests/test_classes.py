@@ -23,12 +23,15 @@ def _setup():
     os.environ["OMD_ROOT"] = omd_root
     shutil.rmtree(omd_root+"/var", ignore_errors=True)
     os.makedirs(omd_root+"/var/log", 0o755)
-    shutil.rmtree(omd_root+"/var", ignore_errors=True)
     os.makedirs(omd_root+"/var/tmp", 0o755)
     shutil.rmtree(omd_root+"/tmp", ignore_errors=True)
     os.makedirs(omd_root+"/tmp", 0o755)
+    if os.path.exists(omd_root+"/var/log/eventhandler.debug"):
+        os.remove(omd_root+"/var/log/eventhandler.debug")
     if os.path.exists("/tmp/eventhandler_example.txt"):
         os.remove("/tmp/eventhandler_example.txt")
+    if os.path.exists("/tmp/echo"):
+        os.remove("/tmp/echo")
 
 @pytest.fixture
 def setup():
@@ -53,8 +56,8 @@ def test_example_runner(setup):
 
 def test_example_decider(setup):
     example = eventhandler.baseclass.new("example", None, "example", True, True,  {})
-    fexample = example.new_decider()
-    assert fexample.__class__.__name__ == "ExampleDecider"
+    dexample = example.new_decider()
+    assert dexample.__class__.__name__ == "ExampleDecider"
 
 
 def test_example_logging(setup):
@@ -78,123 +81,76 @@ def test_example_logging(setup):
     
 
 def test_example_decider_prepare_event(setup):
+    sig = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     example = eventhandler.baseclass.new("example", None, "example", True, True,  {})
-    fexample = example.new_decider()
+    dexample = example.new_decider()
     raw_event = {
-        "description": "halo i bims 1 alarm vong naemon her",
+        "content": "halo i bims 1 alarm vong naemon her",
+        "summary": "samari"+sig,
         "timestamp": time.time(),
     }
     event = eventhandler.baseclass.DecidedEvent(raw_event)
-    assert event.eventopts["description"] == "halo i bims 1 alarm vong naemon her"
-    fexample.decide_and_prepare(event)
-    assert event.summary == "halo i bims 1 alarm vong naemon her und i schmeis mi weg"
-    assert event.payload["cmd"] == "echo"
-    assert event.payload["parameters"] == "halo i bims 1 alarm vong naemon her"
+    assert event.eventopts["content"] == "halo i bims 1 alarm vong naemon her"
+    dexample.decide_and_prepare(event)
+    assert event.summary == "samari"+sig
+    assert event.payload["content"] == "halo i bims 1 alarm vong naemon her"
 
 
-def test_example_runner_run(setup):
-    runneropts = {
-        "path": "/tmp",
-    }
+def test_example_runner_run_nodiscard_nosummary(setup):
+    sig = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+    runneropts = { "path": "/tmp", }
+    _setup() # delete logfile
     eventopts = {
-        "description": "halo i bims 1 alarm vong naemon her",
+        "summary": "i bim dem sammari",
+        "content": "halo i bims 1 alarm vong naemon her"+sig,
     }
     example = eventhandler.baseclass.new("example", None, "example", True, True,  runneropts)
-    print(example.__dict__)
-    print(sys.path)
     example.handle(eventopts)
     log = open(get_logfile(example)).read()
-    print(log)
-    assert "INFO - i_bims submits" in log
-    assert "'description': 'halo i bims 1 alarm vong naemon her'" in log
-    # this is the global log, written by the baseclass
-    assert "INFO - forwarded sum: halo i bims 1 alarm vong naemon her" in log
+    print("LOG="+log)
+    assert "INFO - i bim dem sammari" in log
+    echo = open("/tmp/echo").read()
+    assert "halo i bims 1 alarm vong naemon her" in echo
+    assert sig in echo
 
+def test_example_runner_run_discard_loud(setup):
+    runneropts = { "path": "/tmp", }
     _setup() # delete logfile
-    # we need to reinitialize, because the logger has the (deleted) file
-    # still open and further writes would end up in nirvana.
-    example = eventhandler.baseclass.new("example", None, "example", True, True,  reveiveropts)
     eventopts = {
-        "description": "halo i bims 1 alarm vong naemon her again",
+        "summary": "i bim dem sammari", # decider sets own summary
+        "content": "halo i bims 1 alarm vong naemon her",
+        "discard": False, # silently false: write discard: ..summary..
     }
-    example.no_more_logging()
-    example.forward(eventopts)
+    example = eventhandler.baseclass.new("example", None, "example", True, True,  runneropts)
+    #example.no_more_logging()
+    example.handle(eventopts)
     log = open(get_logfile(example)).read()
-    # the decider's logs are still there
-    assert "INFO - i_bims submits" in log
-    assert "'description': 'halo i bims 1 alarm vong naemon her again'" in log
-    # but not the baseclasse's log
-    assert "INFO - forwarded sum: halo i bims 1 alarm vong naemon her" not in log
+    assert "discarded: halo i bims 1 alarm vong naemon her und i schmeis" in log
+    assert not os.path.exists("/tmp/echo") # discard -> no runner
 
-def test_example_runner_forward_success(setup):
-    reveiveropts = {
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-    }
-    signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+def test_example_runner_run_discard_silent(setup):
+    runneropts = { "path": "/tmp", }
+    _setup() # delete logfile
     eventopts = {
-        "description": "halo i bims 1 alarm vong naemon her",
-        "signature": signature,
+        "summary": "i bim dem sammari", # decider sets own summary
+        "content": "halo i bims 1 alarm vong naemon her",
+        "discard": True, # silently true: no logging at all
     }
-    example = eventhandler.baseclass.new("example", None, "example", True, True,  reveiveropts)
-    example.forward(eventopts)
-    assert os.path.exists(example.signaturefile)
-    sig = open(example.signaturefile).read().strip()
-    assert sig == signature
+    example = eventhandler.baseclass.new("example", None, "example", True, True,  runneropts)
+    #example.no_more_logging()
+    example.handle(eventopts)
+    log = open(get_logfile(example)).read()
+    assert "discarded: halo i bims 1 alarm vong naemon her und i schmeis" not in log
+    assert not os.path.exists("/tmp/echo") # discard -> no runner
 
-def test_example_runner_forward_timeout(setup):
-    signatures = [
-        hashlib.sha256(secrets.token_bytes(32)).hexdigest(),
-        hashlib.sha256(secrets.token_bytes(32)).hexdigest(),
-        hashlib.sha256(secrets.token_bytes(32)).hexdigest(),
-    ]
-    reveiveropts = {
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-        "delay": 60,
-    }
+def test_example_runner_timeout(setup):
     eventopts = {
-        "description": "halo i bims 1 alarm vong naemon her",
-        "signature": signatures[0],
+        "summary": "i bim dem sammari", # decider sets own summary
+        "content": "halo i bims 1 alarm vong naemon her",
+        "discard": True, # silently true: no logging at all
+        "delay": 120,
     }
-    example = eventhandler.baseclass.new("example", None, "example", True, True,  reveiveropts)
-    example.forward(eventopts)
-    log = open(get_logfile(example)).read()
-    # this is the global log, written by the baseclass
-    assert "submit ran into a timeout" in log
-    assert "spooled <sum: halo i bims 1 alarm vong naemon her>" in log
-    assert "WARNING - spooling queue length is 1" in log
-    eventopts = {
-        "description": "halo i bim au 1 alarm vong naemon her",
-        "signature": signatures[1],
-    }
-    example = eventhandler.baseclass.new("example", None, "example", True, True,  reveiveropts)
-    example.forward(eventopts)
-    log = open(get_logfile(example)).read()
-    assert "spooled <sum: halo i bim au 1 alarm vong naemon her>" in log
-    assert "WARNING - spooling queue length is 2" in log
-    # now the last two events were spooled and are in the database
+    example = eventhandler.baseclass.new("example", None, "example", True, True,  eventopts)
+    example.handle(eventopts)
+    assert not os.path.exists("/tmp/echo") # discard -> no runner
 
-    reveiveropts = {
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-        "delay": 0,
-    }
-    eventopts = {
-        "description": "i druecke dem spuelung",
-        "signature": signatures[2],
-    }
-    example = eventhandler.baseclass.new("example", None, "example", True, True,  reveiveropts)
-    example.forward(eventopts)
-    log = open(get_logfile(example)).read()
-    assert re.search(r'.*i_bims submits.*i druecke dem spuelung.*', log, re.MULTILINE)
-    assert "forwarded sum: i druecke dem spuelung" in log
-    assert "DEBUG - flush lock set" in log
-    assert "INFO - there are 2 spooled events to be re-sent" in log
-    assert "INFO - delete spooled event 1" in log
-    assert "INFO - delete spooled event 2" in log
-    assert re.search(r'.*i_bims submits.*halo i bims 1 alarm vong naemon her.*', log, re.MULTILINE)
-    assert re.search(r'.*i_bims submits.*halo i bim au 1 alarm vong naemon her.*', log, re.MULTILINE)
-    sigs = [l.strip() for l in open(example.signaturefile).readlines()]
-    # flushing first, then the new event
-    assert sigs == signatures

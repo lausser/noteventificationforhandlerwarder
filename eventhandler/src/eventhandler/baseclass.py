@@ -146,6 +146,7 @@ class EventhandlerRunner(object):
                     logger.info("discarded: {}".format(decided_event.summary))
                 decided_event = None
             elif decided_event and not decided_event.is_complete():
+                print(decided_event.__dict__)
                 logger.critical("a decided event {} must have the attributes payload and summary".format(decided_event.__class__.__name__))
                 decided_event = None
         except Exception as e:

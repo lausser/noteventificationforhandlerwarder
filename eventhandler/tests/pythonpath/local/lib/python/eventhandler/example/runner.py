@@ -1,4 +1,4 @@
-import subprocess
+import time
 from eventhandler.baseclass import EventhandlerRunner
 
 class ExampleRunner(EventhandlerRunner):
@@ -8,7 +8,7 @@ class ExampleRunner(EventhandlerRunner):
         setattr(self, "echofile", getattr(self, "echofile", "/tmp/echo"))
 
     def run(self, event):
-        cmd = "echo '{}' > {}".format(event.payload["content"], self.echofile)
-        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = proc.communicate()
+        if "delay" in event.payload:
+            time.sleep(event.payload["delay"])
+        return "echo '{}' > {}".format(event.payload["content"], self.echofile)
 
