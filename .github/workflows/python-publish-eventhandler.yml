@@ -71,7 +71,7 @@ jobs:
       uses: pypa/gh-action-pypi-publish@v1.8.10
       with:
         user: __token__
-        password: ${{ secrets.PYPI_API_TOKEN_NF }}
+        password: ${{ secrets.PYPI_API_TOKEN_eh }}
         verbose: true
         packages-dir: ./eventhandler/dist
         verify-metadata: false
