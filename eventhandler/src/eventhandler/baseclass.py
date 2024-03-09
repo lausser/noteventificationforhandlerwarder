@@ -173,9 +173,9 @@ class EventhandlerRunner(object):
                 success = True
             else:
                 command = self.run(decided_event)
-# None = runner was python and did everything itself
-# ?? 
-#
+# True/False = runner was python and did everything itself
+# Basestring = command to run
+# None = ??
                 if not command:
                     raise Exception("runner did not return a command")
                 logger.debug(f"command is {command}")
