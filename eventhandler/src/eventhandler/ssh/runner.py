@@ -8,6 +8,7 @@ class SshRunner(EventhandlerRunner):
         setattr(self, "hostname", getattr(self, "hostname", "localhost"))
         setattr(self, "port", getattr(self, "port", None))
         setattr(self, "identity_file", getattr(self, "identity_file", None))
+        setattr(self, "command", getattr(self, "command", "exit 0"))
 
     def run(self, event):
         cmd = "ssh"
