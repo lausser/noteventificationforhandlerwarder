@@ -47,7 +47,7 @@ def new(target_name, tag, formatter, verbose, debug, receiveropts):
             module_name, class_name = target_name.rsplit('.', 1)
         else:
             module_name = target_name
-            class_name = target_name.capitalize()+"Forwarder"
+            class_name = "".join([x.title() for x in target_name.split("_")])+"Forwarder"
         forwarder_module = import_module('notificationforwarder.'+module_name+'.forwarder', package='notificationforwarder.'+module_name)
         forwarder_class = getattr(forwarder_module, class_name)
 
@@ -130,7 +130,7 @@ class NotificationForwarder(object):
     def new_formatter(self):
         try:
             module_name = self.formatter_name
-            class_name = self.formatter_name.capitalize()+"Formatter"
+            class_name = "".join([x.title() for x in self.formatter_name.split("_")])+"Formatter"
             formatter_module = import_module('.formatter', package='notificationforwarder.'+module_name)
             formatter_module.logger = logger
             formatter_class = getattr(formatter_module, class_name)
