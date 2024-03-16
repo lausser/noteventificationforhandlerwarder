@@ -8,11 +8,13 @@ class NscWebRunner(EventhandlerRunner):
         setattr(self, "hostname", getattr(self, "hostname", "localhost"))
         setattr(self, "port", getattr(self, "port", 8443))
         setattr(self, "password", getattr(self, "password", None))
+        setattr(self, "command", getattr(self, "command", "check_uptime"))
+        setattr(self, "arguments", getattr(self, "arguments", None))
 
     def run(self, event):
         cmd = "{}/lib/nagios/plugins/check_nsc_web -k -u https://{}:{} -p '{}' -t 180".format(os.environ["OMD_ROOT"], self.hostname, self.port, self.password)
-        if "arguments" in event.payload:
-            cmd += " {} '{}'".format(event.payload["command"], event.payload["arguments"])
+        if self.arguments:
+            cmd += " {} '{}'".format(self.command, self.arguments)
         else:
-            cmd += " {}".format(event.payload["command"])
+            cmd += " {}".format(self.command)
         return cmd

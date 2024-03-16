@@ -18,5 +18,5 @@ class SshRunner(EventhandlerRunner):
             cmd += f" -p {self.port}"
         if self.identity_file:
             cmd += f" -i {self.identity_file}"
-        cmd += " {} '{}'".format(self.hostname, event.payload["command"])
+        cmd += " {} '{}'".format(self.hostname, self.command)
         return cmd

@@ -146,8 +146,7 @@ class EventhandlerRunner(object):
                     logger.info("discarded: {}".format(decided_event.summary))
                 decided_event = None
             elif decided_event and not decided_event.is_complete():
-                print(decided_event.__dict__)
-                logger.critical("a decided event {} must have the attributes payload and summary".format(decided_event.__class__.__name__))
+                logger.critical("a decided event {} must have the attributes payload and summary. {}".format(decided_event.__class__.__name__, decided_event.__dict__))
                 decided_event = None
         except Exception as e:
             try:
@@ -172,17 +171,26 @@ class EventhandlerRunner(object):
             if decided_event == None:
                 success = True
             else:
-                command = self.run(decided_event)
-# True/False = runner was python and did everything itself
-# Basestring = command to run
-# None = ??
-                if not command:
-                    raise Exception("runner did not return a command")
-                logger.debug(f"command is {command}")
-                proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                stdout, stderr = proc.communicate()
-                exit_code = proc.wait()
-                success = True if exit_code == 0 else False
+                runner_res = self.run(decided_event)
+                if isinstance(runner_res, str):
+                    # The runner returns a command line
+                    command = runner_res
+                    logger.debug(f"command is {command}")
+                    proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    stdout, stderr = proc.communicate()
+                    exit_code = proc.wait()
+                    success = True if exit_code == 0 else False
+                elif runner_res in [True, False]:
+                    # The runner is pure python or executed a command itself or
+                    # did something else. It only reports success or failure to the baseclass.
+                    # No stdout, stderr. the runner has to write output itself
+                    success = runner_res
+                elif runner_res == None:
+                    # runner discard
+                    success = False
+                    self.no_more_logging()
+                else:
+                    success = False
         except Exception as e:
             success = False
             decide_exception_msg = str(e)
