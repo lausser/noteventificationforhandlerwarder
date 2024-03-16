@@ -53,6 +53,8 @@ jobs:
         pip install jinja2
     - name: Build package
       run: |
+        PKGVERS=$(grep -oP 'version = "\K[^"]+' pyproject.toml | awk '{print $1}')
+        sed -ri "s/VERSION/$VERSION/g" bin/notificationforwarder
         python -m build
         pwd
         find .
