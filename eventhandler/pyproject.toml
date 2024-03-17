@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 include = [
     "src/**/*.py",
     "/tests",
+    "/bin/",
 ]
 exclude = [
     "__pacache__/",
@@ -15,9 +16,12 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/eventhandler"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"./bin/eventhandler" = "eventhandler/bin_folder/eventhandler"
+
 [project]
 name = "omdeventhandler"
-version = "0.4.1"
+version = "0.4.2"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]
