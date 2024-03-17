@@ -15,9 +15,12 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/notificationforwarder"]
 
+[tool.hatch.build.targets.wheel.data]
+bin/notificationforwarder = "bin/notificationforwarder"
+
 [project]
 name = "omdnotificationforwarder"
-version = "2.5.3.1"
+version = "2.6"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]
