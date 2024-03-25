@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 include = [
     "src/**/*.py",
     "/tests",
+    "/bin/",
 ]
 exclude = [
     "__pacache__/",
@@ -15,9 +16,12 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/notificationforwarder"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"./bin/notificationforwarder" = "notificationforwarder/bin_folder/notificationforwarder"
+
 [project]
 name = "omdnotificationforwarder"
-version = "2.4.1"
+version = "2.6.0.2"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]

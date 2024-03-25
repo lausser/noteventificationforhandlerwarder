@@ -142,7 +142,7 @@ def test_forward_webhook_format_rabbitmq(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "rabbitmq", True, True,  reveiveropts)
     webhook.forward(eventopts)
     log = open(get_logfile(webhook)).read()
-    assert "INFO - forwarded" in log 
+    assert "INFO - success:" in log 
     assert signature in log 
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
@@ -164,7 +164,7 @@ def test_forward_webhook_format_example(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "example", True, True,  reveiveropts)
     webhook.forward(eventopts)
     log = open(get_logfile(webhook)).read()
-    assert "INFO - forwarded sum: "+eventopts["description"] in log 
+    assert "INFO - success: sum: "+eventopts["description"] in log 
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
@@ -187,7 +187,7 @@ def test_forward_webhook_format_vong(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     webhook.forward(eventopts)
     log = open(get_logfile(webhook)).read()
-    assert "INFO - forwarded i hab dem post gepost" in log 
+    assert "INFO - success: i hab dem post gepost" in log 
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
@@ -208,7 +208,7 @@ def test_forward_webhook_format_bayern(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "bayern", True, True,  reveiveropts)
     webhook.forward(eventopts)
     log = open(get_logfile(webhook)).read()
-    assert "INFO - forwarded des glump {} is hi".format(eventopts["HOSTNAME"]) in log
+    assert "INFO - success: des glump {} is hi".format(eventopts["HOSTNAME"]) in log
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)

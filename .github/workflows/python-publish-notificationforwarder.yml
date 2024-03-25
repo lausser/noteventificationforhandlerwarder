@@ -53,6 +53,8 @@ jobs:
         pip install jinja2
     - name: Build package
       run: |
+        PKGVERS=$(grep -oP 'version = "\K[^"]+' pyproject.toml | awk '{print $1}')
+        sed -ri "s/VERSION/$VERSION/g" bin/notificationforwarder
         python -m build
         pwd
         find .
@@ -68,10 +70,16 @@ jobs:
       #   sucht nach ls -A './notificationforwarder/*.whl'
       #   knallt mit IsADirectoryError: [Errno 21] Is a directory: '/github/workspace/notificationforwarder/dist'
       # 2 versuch mit packages-dir: ./notificationforwarder/dist
-      uses: pypa/gh-action-pypi-publish@v1.8.10
+      uses: pypa/gh-action-pypi-publish@v1.8.14
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN_NF }}
         verbose: true
         packages-dir: ./notificationforwarder/dist
         verify-metadata: false
+    - name: Setup tmate session
+      if: ${{ failure() }}
+      uses: mxschmitt/action-tmate@v3
+      timeout-minutes: 30
+      with:
+        limit-access-to-actor: true

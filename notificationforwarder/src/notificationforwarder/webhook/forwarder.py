@@ -63,6 +63,7 @@ class WebhookForwarder(NotificationForwarder):
             response = requests.post(self.url, **request_params)
             if response.status_code == requests.codes.ok:
                 logger.info("success: {} result is {}, request was {}".format(event.summary, response.text, event.payload))
+                self.no_more_logging()
                 return True
             elif response.status_code in [requests.codes.timeout, requests.codes.gateway_timeout]:
                 logger.critical("POST timeout "+str(response.status_code)+" "+response.text)
