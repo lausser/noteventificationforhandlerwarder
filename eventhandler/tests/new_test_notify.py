@@ -20,9 +20,7 @@ os.environ["OMD_ROOT"] = omd_root
 if not [p for p in sys.path if "pythonpath" in p]:
     sys.path.append(omd_root+"/pythonpath/local/lib/python")
     sys.path.append(omd_root+"/pythonpath/lib/python")
-    sys.path.append(omd_root+"/pythonpath/../src")
     sys.path.append(omd_root+"/../../notificationforwarder/src")
-    print("PYTHONPATH="+":".join(sys.path))
     os.environ["PYTHONPATH"] = ":".join(sys.path)
 
 import notificationforwarder.baseclass
@@ -123,19 +121,22 @@ def server_fixture(request):
 
 
 def test_th_formatter(server_fixture):
+    print("TESTEN")
     #pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
 
-    command = """echo PYTHONPATH=$PYTHONPATH OMD_SITE=my_devel_site OMD_ROOT={} {} \\
+    command = """PYTHONPATH=$PYTHONPATH OMD_SITE=my_devel_site OMD_ROOT={} {} \\
         --runner example \\
         --runnertag evtnot \\
         --runneropt echofile=/tmp/123 \\
-        --decider eaxmple \\
+        --decider example \\
         --eventopt HOSTNAME=vongsrv04 \\
         --eventopt HOSTSTATE=DOWN \\
         --eventopt NOTIFICATIONTYPE=PROBLEM \\
+        --eventopt content=test \\
+        --eventopt summary=summsumm \\
         --debug \\
-        2>&1 > /tmp/eventhandler_errors.log \\
+        2>&1 > /tmp/eventhandler_errors.log
     """.format(omd_root, os.environ["OMD_ROOT"]+"/../bin/eventhandler")
 # --forwarder webhook/example -> /tmp/123
     print(sys.path)
@@ -143,7 +144,9 @@ def test_th_formatter(server_fixture):
 
 
 
-    subprocess.call(command, shell=True)
+    run = subprocess.run(command, capture_output=True, shell=True)
+    print(run.__dict__) 
+    raise
 #    log = open(get_logfile(webhook)).read()
 #    with open("/tmp/received_payload.json") as f:
 #        payload = f.read()
