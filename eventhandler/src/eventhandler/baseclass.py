@@ -137,6 +137,7 @@ class EventhandlerRunner(object):
             return None
 
     def handle(self, raw_event):
+        success = False
         try:
             decided_event = self.decide_and_prepare_event(raw_event)
             if decided_event.is_discarded:
@@ -154,9 +155,11 @@ class EventhandlerRunner(object):
             except NameError:
                 logger.critical("raw event {} caused error {}".format(str(raw_event), str(e)))
             decided_event = None
+            success = None
         if decided_event:
             self.overwrite_attributes(decided_event.payload)
             success = self.run_decided(decided_event)
+        return success
 
     def overwrite_attributes(self, payload):
         # paload can overwrite runneropts

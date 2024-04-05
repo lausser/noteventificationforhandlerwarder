@@ -8,7 +8,7 @@ class ExampleDecider(EventhandlerDecider):
             event.discard(silently=event.eventopts["discard"])
             event.summary = "halo i bims 1 alarm vong naemon her und i schmeis mi weg"
         else:
-            event.summary = event.eventopts.get("summary", None)
+            event.summary = "summary is "+event.eventopts.get("summary", None)
         event.payload = {
             "content": event.eventopts["content"],
         }

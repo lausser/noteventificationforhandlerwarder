@@ -114,7 +114,7 @@ will be sent to the forwarder like an alarm notification.""")
                       help='Increase the log level to DEBUG',
                       default=False)
     parser.add_argument('--version', action='version',
-                      version=f'%(prog)%s 0.0')
+                      version=f'%(prog)%s VERSION')
 
     args = parser.parse_args()
     if not any(vars(args).values()):
@@ -146,5 +146,9 @@ will be sent to the forwarder like an alarm notification.""")
             logger.critical("there is no class for forwarder {} and formatter {}".format(args.forwarder, args.formatter))
             sys.exit(1)
     
-    runner.handle(args.eventopt)
-
+    success = runner.handle(args.eventopt)
+    if args.forwarder:
+        if success != None:
+            args.eventopt["eventhandler_success"] = success
+            runner.forwarder.forward(args.eventopt)
+    sys.exit(1 if success == False else 0)
