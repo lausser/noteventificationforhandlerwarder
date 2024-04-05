@@ -54,7 +54,8 @@ jobs:
     - name: Build package
       run: |
         PKGVERS=$(grep -oP 'version = "\K[^"]+' pyproject.toml | awk '{print $1}')
-        sed -ri "s/VERSION/$VERSION/g" bin/notificationforwarder
+        sed -ri "s/VERSION/$PKGVERS/g" bin/notificationforwarder
+        grep version= bin/notificationforwarder
         python -m build
         pwd
         find .
