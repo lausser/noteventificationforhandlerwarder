@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 import os
+import re
 import socket
 import traceback
 import signal
@@ -138,6 +139,9 @@ class EventhandlerRunner(object):
 
     def handle(self, raw_event):
         success = False
+        if "SERVICEDESC" in raw_event:
+            if re.match(r'(Return\ code\ of|Timed\ Out|timed\ out|check_by_ssh:\ Remote\ command|service\ check\ orphaned)', raw_event["SERVICEDESC"]):
+                return True
         try:
             decided_event = self.decide_and_prepare_event(raw_event)
             if decided_event.is_discarded:
@@ -158,7 +162,25 @@ class EventhandlerRunner(object):
             success = None
         if decided_event:
             self.overwrite_attributes(decided_event.payload)
-            success = self.run_decided(decided_event)
+            success, stdout, stderr = self.run_decided(decided_event)
+            if hasattr(self, "forwarder"):
+                raw_event["NOTIFICATIONTYPE"] = "EVENTHANDLER"
+                raw_event["NOTIFICATIONAUTHOR"] = self.runner_name
+                raw_event["NOTIFICATIONCOMMENT"] = "stdout: {}, stderr: {}".format(stdout if stdout else "-", stderr if stderr else "-")
+                if "SERVICEDESC" in raw_event:
+                    if success:
+                        raw_event["SERVICESTATE"] = "OK"
+                    else:
+                        raw_event["SERVICESTATE"] = "CRITICAL"
+                else:
+                    if success:
+                        raw_event["HOSTSTATE"] = "UP"
+                    else:
+                        raw_event["HOSTSTATE"] = "DOWN"
+                raw_event["eventhandler_success"] = success
+                if success != None:
+                    # none means, python runner has aborted intentionally
+                    self.forwarder.forward(raw_event)
         return success
 
     def overwrite_attributes(self, payload):
@@ -202,7 +224,7 @@ class EventhandlerRunner(object):
             if self.baseclass_logs_summary:
                 logger.info("{}".format(decided_event.summary))
                 logger.debug("stdout {}, stderr {}".format(stdout if stdout else "", stderr if stderr else ""))
-            return True
+            return True, stdout, stderr
         else:
             if stderr:
                 logger.critical("run failed: stdout {}, stderr {}, event {}".format(stdout if stdout else "", stderr if stderr else "", decided_event.summary))
@@ -210,7 +232,7 @@ class EventhandlerRunner(object):
                 logger.critical("run failed: exception <{}>, event was <{}>".format(decide_exception_msg, decided_event.summary))
             elif self.baseclass_logs_summary:
                 logger.critical("run failed: stdout {}, stderr {}, exitcode {}, event {}".format(stdout if stdout else "", stderr if stderr else "", exit_code, decided_event.summary))
-            return False
+            return False, stdout, stderr
 
 
     def no_more_logging(self):

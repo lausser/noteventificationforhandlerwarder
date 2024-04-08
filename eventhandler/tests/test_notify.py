@@ -173,6 +173,8 @@ def test_eventhandler_success_notification(server_fixture):
         notlog = f.read().strip()
     assert "signature=no_"+random_string in notlog
     assert "eventhandler for vongsrv04/some_service succeeded" in notlog
+    assert "notificationtype=EVENTHANDLER" in notlog
+    assert "notificationauthor=example_evthdl" in notlog
 
 
 def test_eventhandler_failure_notification(server_fixture):

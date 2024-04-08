@@ -147,8 +147,4 @@ will be sent to the forwarder like an alarm notification.""")
             sys.exit(1)
     
     success = runner.handle(args.eventopt)
-    if args.forwarder:
-        if success != None:
-            args.eventopt["eventhandler_success"] = success
-            runner.forwarder.forward(args.eventopt)
     sys.exit(1 if success == False else 0)
