@@ -40,11 +40,15 @@ def new(target_name, tag, formatter, verbose, debug, forwarderopts):
     if "logfile_backups" in forwarderopts:
         backup_count = forwarderopts["logfile_backups"]
         del forwarderopts["logfile_backups"]
+    elif "NOTIFICATIONFORWARDER_LOGFILE_BACKUPS" in os.environ:
+        backup_count = os.environ["NOTIFICATIONFORWARDER_LOGFILE_BACKUPS"]
     else:
         backup_count = 3
     if "max_spool_minutes" in forwarderopts:
         max_spool_minutes = forwarderopts["max_spool_minutes"]
         del forwarderopts["max_spool_minutes"]
+    elif "NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES" in os.environ:
+        max_spool_minutes = os.environ["NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES"]
     else:
         max_spool_minutes = 5
 
