@@ -23,6 +23,9 @@ if not [p for p in sys.path if "pythonpath" in p]:
     sys.path.append(omd_root+"/pythonpath/lib/python")
     sys.path.append(omd_root+"/../../notificationforwarder/src")
     os.environ["PYTHONPATH"] = ":".join(sys.path)
+if not [p for p in sys.path if "notificationforwarder" in p]:
+    sys.path.append(omd_root+"/../../notificationforwarder/src")
+    os.environ["PYTHONPATH"] = ":".join(sys.path)
 
 import notificationforwarder.baseclass
 
@@ -212,7 +215,7 @@ def test_eventhandler_failure_notification(server_fixture):
     with open(omd_root+"/var/log/eventhandler_example_evthdl.log") as f:
         evtlog = f.read().strip()
     assert "CRITICAL - run failed" in evtlog
-    assert "cannot create /tmp/123/123/123" in evtlog
+    assert "/tmp/123/123/123: No such file or directory" in evtlog
     # assert the notificationhandler
     assert os.path.exists("/tmp/received_payload.json")
     with open('/tmp/received_payload.json') as f:

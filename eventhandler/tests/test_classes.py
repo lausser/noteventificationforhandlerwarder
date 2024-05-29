@@ -92,7 +92,7 @@ def test_example_decider_prepare_event(setup):
     event = eventhandler.baseclass.DecidedEvent(raw_event)
     assert event.eventopts["content"] == "halo i bims 1 alarm vong naemon her"
     dexample.decide_and_prepare(event)
-    assert event.summary == "samari"+sig
+    assert event.summary == "summary is samari"+sig
     assert event.payload["content"] == "halo i bims 1 alarm vong naemon her"
 
 
@@ -108,7 +108,7 @@ def test_example_runner_run_nodiscard_nosummary(setup):
     example.handle(eventopts)
     log = open(get_logfile(example)).read()
     print("LOG="+log)
-    assert "INFO - i bim dem sammari" in log
+    assert "INFO - summary is i bim dem sammari" in log
     echo = open("/tmp/echo").read()
     assert "halo i bims 1 alarm vong naemon her" in echo
     assert sig in echo
