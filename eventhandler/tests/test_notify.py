@@ -205,7 +205,9 @@ def test_eventhandler_failure_notification(server_fixture):
         --eventopt signature=no_{} \\
         2>&1 > /tmp/eventhandler_errors.log
     """.format(omd_root, os.environ["OMD_ROOT"]+"/../bin/eventhandler", random_string, random_string)
-    run = subprocess.run(command, capture_output=True, shell=True)
+    # old github pythons cant capture
+    #run = subprocess.run(command, capture_output=True, shell=True)
+    run = subprocess.run(command, shell=True)
     tac = time.time()
     print(run.__dict__) 
     assert run.returncode == 1
@@ -215,7 +217,7 @@ def test_eventhandler_failure_notification(server_fixture):
     with open(omd_root+"/var/log/eventhandler_example_evthdl.log") as f:
         evtlog = f.read().strip()
     assert "CRITICAL - run failed" in evtlog
-    assert "/tmp/123/123/123: No such file or directory" in evtlog
+    assert "/tmp/123/123/123: No such file or directory" in evtlog or "cannot create /tmp/123/123/123" in evtlog
     # assert the notificationhandler
     assert os.path.exists("/tmp/received_payload.json")
     with open('/tmp/received_payload.json') as f:
