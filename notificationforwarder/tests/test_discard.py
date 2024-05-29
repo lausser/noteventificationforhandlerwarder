@@ -51,7 +51,7 @@ def test_discard_do_not_discard(setup):
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt was_i_machn_tu=nix".format(omd_root, pythonpath, cmd, signature)
+    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt username=i_bims --forwarderopt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt was_i_machn_tu=nix".format(omd_root, pythonpath, cmd, signature)
     subprocess.call(cmd, shell=True)
     log = open(get_logfile(split3)).read()
     assert "forwarder" in log # written by split3 forwarder
@@ -68,7 +68,7 @@ def test_discard_discard_silently(setup):
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt 'was_i_machn_tu=dem maul haltn'".format(omd_root, pythonpath, cmd, signature)
+    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt username=i_bims --forwarderopt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt 'was_i_machn_tu=dem maul haltn'".format(omd_root, pythonpath, cmd, signature)
     subprocess.call(cmd, shell=True)
     log = open(get_logfile(split3)).read()
     assert "forwarder" not in log # written by split3 forwarder
@@ -86,7 +86,7 @@ def test_discard_discard_with_own_comment(setup):
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt 'was_i_machn_tu=dem semf dazugebn'".format(omd_root, pythonpath, cmd, signature)
+    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt username=i_bims --forwarderopt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt 'was_i_machn_tu=dem semf dazugebn'".format(omd_root, pythonpath, cmd, signature)
     subprocess.call(cmd, shell=True)
     log = open(get_logfile(split3)).read()
     assert "forwarder" not in log # written by split3 forwarder
@@ -105,7 +105,7 @@ def test_discard_discard_with_default_comment(setup):
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt 'was_i_machn_tu=dem automatischn semf dazugebn'".format(omd_root, pythonpath, cmd, signature)
+    cmd = "OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt username=i_bims --forwarderopt password=dem_is_geheim --formatter discard --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={} --eventopt 'was_i_machn_tu=dem automatischn semf dazugebn'".format(omd_root, pythonpath, cmd, signature)
     subprocess.call(cmd, shell=True)
     log = open(get_logfile(split3)).read()
     assert "forwarder" not in log # written by split3 forwarder

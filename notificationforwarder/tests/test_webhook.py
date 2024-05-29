@@ -228,10 +228,10 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
-    reveiveroptsparams = " ".join(["--receiveropt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
     log = open(get_logfile(webhook)).read()
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
@@ -239,7 +239,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     assert payload["host_name"] == "vongsrv02"
 
 def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
-    # auth with token, token is in receiveropts
+    # auth with token, token is in forwarderopts
     reveiveropts = {
         "url": "http://localhost:8080",
         "headers": '{"Authorization": "Bearer i_bims_1_token"}',
@@ -252,10 +252,10 @@ def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
-    reveiveroptsparams = " ".join(["--receiveropt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
     #raise
     log = open(get_logfile(webhook)).read()
     with open("/tmp/received_payload.json") as f:
@@ -281,10 +281,10 @@ def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture)
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
-    reveiveroptsparams = " ".join(["--receiveropt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
     log = open(get_logfile(webhook)).read()
     with open("/tmp/received_payload.json") as f:
         payload = f.read()

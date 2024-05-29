@@ -102,6 +102,12 @@ class MyspecialreceiverForwarder(NotificationForwarder):
 Again, the class name has to be the argument of the *\-\-forwarder* parameter with the first letter in upper case, but this time with "Forwarder" appended. This class must have a method *submit()*, which gets the event object which was supplied with payload and summary in the formatting step. If submit() returns a False value, the framework will spool the event in a database.
 The next time Naemon is executing the notificationforwarder script for this receiver, it will try to submit the events which have been spooled so far. If the Forwarder class has an optional method *probe()*, it will first check if the receiver is now up again before it flushes the spooled events with the *submit()* method.
 
+There are two special *forwarderopt* parameters.
+* \-\-forwarderopt logfile_backups=n  
+  Besides the default logfile *var/log/notificationforwarder_...* there will be n rotated archive files. (Rotation takes place after the logfile reaches 20MB, default is 3 archives)  
+* \-\-forwarderopt max_spool_minutes=n  
+  When submitting an event fails, it will be spooled for n minutes. Within this time re-submitting will be attempted on every call to notificationforwarder. (Default is 5)  
+
 ## Forwarders/Formatters which come with the module
 
 ### WebhookForwarder

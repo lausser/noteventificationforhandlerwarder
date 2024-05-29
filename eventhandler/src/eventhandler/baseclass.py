@@ -36,7 +36,13 @@ def new(target_name, tag, decider, verbose, debug, runneropts):
         txtloglevel = logging.INFO
     logger_name = "eventhandler_"+runner_name
 
-    setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s")
+    if "logfile_backups" in runneropts:
+        backup_count = runneropts["logfile_backups"]
+        del runneropts["logfile_backups"]
+    else:
+        backup_count = 3
+
+    setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s", backup_count=backup_count)
     logger = logging.getLogger(logger_name)
     try:
         if '.' in target_name:

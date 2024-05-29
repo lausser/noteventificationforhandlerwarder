@@ -21,12 +21,9 @@ import logging
 from coshsh.util import setup_logging
 
 
-MAXAGE = 5
-
-
 logger = None
 
-def new(target_name, tag, formatter, verbose, debug, receiveropts):
+def new(target_name, tag, formatter, verbose, debug, forwarderopts):
 
     forwarder_name = target_name + ("_"+tag if tag else "")
     if verbose:
@@ -40,7 +37,19 @@ def new(target_name, tag, formatter, verbose, debug, receiveropts):
         txtloglevel = logging.INFO
     logger_name = "notificationforwarder_"+forwarder_name
 
-    setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s")
+    if "logfile_backups" in forwarderopts:
+        backup_count = forwarderopts["logfile_backups"]
+        del forwarderopts["logfile_backups"]
+    else:
+        backup_count = 3
+    if "max_spool_minutes" in forwarderopts:
+        max_spool_minutes = forwarderopts["max_spool_minutes"]
+        del forwarderopts["max_spool_minutes"]
+    else:
+        max_spool_minutes = 5
+
+
+    setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s", backup_count=backup_count)
     logger = logging.getLogger(logger_name)
     try:
         if '.' in target_name:
@@ -51,13 +60,14 @@ def new(target_name, tag, formatter, verbose, debug, receiveropts):
         forwarder_module = import_module('notificationforwarder.'+module_name+'.forwarder', package='notificationforwarder.'+module_name)
         forwarder_class = getattr(forwarder_module, class_name)
 
-        instance = forwarder_class(receiveropts)
+        instance = forwarder_class(forwarderopts)
         instance.__module_file__ = forwarder_module.__file__
         instance.name = target_name
         if tag:
             instance.tag = tag
         instance.forwarder_name = forwarder_name
         instance.formatter_name = formatter
+        instance.max_spool_minutes = max_spool_minutes
         instance.init_paths()
         instance.init_db()
 
@@ -269,7 +279,7 @@ class NotificationForwarder(object):
                 locked = False
             if locked:
                 try:
-                    outdated = int(time.time() - 60*MAXAGE)
+                    outdated = int(time.time() - 60*self.max_spool_minutes)
                     self.dbcurs.execute(sql_delete, (outdated,))
                     dropped = self.dbcurs.rowcount
                     if dropped:

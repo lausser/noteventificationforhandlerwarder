@@ -100,7 +100,7 @@ A forwarder is optional. If you use one, then the result of an event handler
 will be sent to the forwarder like an alarm notification.""")
     parser.add_argument('--formatter', action='store', dest="formatter", nargs='?', const=None,
                       help='''The formatter to use for the event...
-                      default is the value of --receiver if not provided''',
+                      default is the value of --forwarder if not provided''',
                       default=argparse.SUPPRESS)
     parser.add_argument('--livestatus', action='store',
                       dest="livestatus",

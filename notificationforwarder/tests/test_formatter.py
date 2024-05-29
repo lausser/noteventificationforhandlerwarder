@@ -102,8 +102,8 @@ def test_split3_forwarder_split4_formatter_bin_old(setup):
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --receiver split3 --receiveropt username=i_bims --receiveropt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt username=i_bims --forwarderopt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt username=i_bims --forwarderopt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature), shell=True)
     log = open(get_logfile(split3)).read()
     assert "split4_"+signature+"_split4" in log
 
