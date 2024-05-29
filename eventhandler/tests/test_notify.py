@@ -151,7 +151,9 @@ def test_eventhandler_success_notification(server_fixture):
         --eventopt signature=no_{} \\
         2>&1 > /tmp/eventhandler_errors.log
     """.format(omd_root, os.environ["OMD_ROOT"]+"/../bin/eventhandler", random_string, random_string)
-    run = subprocess.run(command, capture_output=True, shell=True)
+    # old github pythons cant capture
+    #run = subprocess.run(command, capture_output=True, shell=True)
+    run = subprocess.run(command, shell=True)
     tac = time.time()
     print(run.__dict__) 
     assert run.returncode == 0
