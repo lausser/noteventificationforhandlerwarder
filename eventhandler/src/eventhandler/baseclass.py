@@ -37,10 +37,10 @@ def new(target_name, tag, decider, verbose, debug, runneropts):
     logger_name = "eventhandler_"+runner_name
 
     if "logfile_backups" in runneropts:
-        backup_count = runneropts["logfile_backups"]
+        backup_count = int(runneropts["logfile_backups"])
         del runneropts["logfile_backups"]
     elif "EVENTHANDLER_LOGFILE_BACKUPS" in os.environ:
-        backup_count = os.environ["EVENTHANDLER_LOGFILE_BACKUPS"]
+        backup_count = int(os.environ["EVENTHANDLER_LOGFILE_BACKUPS"])
     else:
         backup_count = 3
 

@@ -1,0 +1,1 @@
+2024-05-29 17:32:16,328 250136 - INFO - success: eventhandler for vongsrv04/some_service failed (signature=no_ZfC7UxL1qU), ident=notificationtype=EVENTHANDLER,notificationauthor=example_evthdl result is , request was {'timestamp': 1716996736.3236957, 'description': 'i_describe_an_eventhandler', 'signature': 'no_ZfC7UxL1qU'}

@@ -1,0 +1,16 @@
+[user]
+	name = Gerhard Lausser
+	email = gerhard.lausser@consol.de
+[core]
+#	autocrlf = true
+#	safecrlf = warn
+#	filemode = false
+	autocrlf = false
+	eol = lf
+[pack]
+	windowMemory = 4096m
+	window = 0
+[push]
+	default = simple
+[init]
+	defaultBranch = master
