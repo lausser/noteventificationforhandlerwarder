@@ -1,1 +1,0 @@
-2024-05-29 17:32:16,321 250136 - CRITICAL - run failed: stdout , stderr b'/bin/sh: line 1: /tmp/123/123/123: No such file or directory\n', event summary is summsumm
