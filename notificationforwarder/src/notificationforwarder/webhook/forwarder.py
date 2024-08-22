@@ -61,7 +61,7 @@ class WebhookForwarder(NotificationForwarder):
                 request_params["headers"]["Content-type"] = "application/json"
 
             response = requests.post(self.url, **request_params)
-            if response.status_code == requests.codes.ok:
+            if response.status_code in [requests.codes.ok, requests.codes.accepted, requests.codes.created]:
                 logger.info("success: {} result is {}, request was {}".format(event.summary, response.text, event.payload))
                 self.no_more_logging()
                 return True
