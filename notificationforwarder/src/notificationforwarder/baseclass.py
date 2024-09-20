@@ -173,7 +173,8 @@ class NotificationForwarder(object):
             raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
         raw_event["omd_originating_host"] = socket.gethostname()
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
-        raw_event["omd_originating_timestamp"] = int(time.time())
+        if not "omd_originating_timestamp" in raw_event:
+            raw_event["omd_originating_timestamp"] = int(time.time())
         try:
             empty_macros = []
             for macro in raw_event:
