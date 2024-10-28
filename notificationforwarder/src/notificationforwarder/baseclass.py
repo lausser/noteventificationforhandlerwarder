@@ -192,6 +192,12 @@ class NotificationForwarder(object):
 
     def format_event(self, raw_event):
         instance = self.new_formatter()
+        if not "omd_site" in raw_event:
+            raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
+        raw_event["omd_originating_host"] = socket.gethostname()
+        raw_event["omd_originating_fqdn"] = socket.getfqdn()
+        if not "omd_originating_timestamp" in raw_event:
+            raw_event["omd_originating_timestamp"] = int(time.time())
         try:
             formatted_event = FormattedEvent(raw_event)
             instance.format_event(formatted_event)
