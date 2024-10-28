@@ -50,6 +50,18 @@ the type of backend. Example for VictorOps:
                       help='''The formatter to use for the event...
                       default is the value of --forwarder if not provided''',
                       default=argparse.SUPPRESS)
+    parser.add_argument('--reporter', action='store', dest="reporter", nargs='?',
+                      help='''The reporter module to use for logging/reporting success/failure.
+If not provided, no reporting will be done.
+Examples could be logging to , sending to another API, etc.''',
+                      default=None)
+    parser.add_argument('--reporteropt', action=type('', (argparse.Action,),
+        dict(__call__=lambda a, p, n, v, o:
+            getattr(n, a.dest).update(dict([v.split('=', 1)])))),
+                default={},
+                help="""Reporter attributes. These are specific for the type of reporter backend.
+Example for an HTTP-based reporter:
+--reporteropt api_url=https://example.com --reporteropt auth_token=abcd1234""")
     parser.add_argument('--livestatus', action='store',
                       dest="livestatus",
                       help='The livestatus port')
@@ -69,7 +81,7 @@ the type of backend. Example for VictorOps:
         args.formatter = args.forwarder
 
     try:
-        forwarder = baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt)
+        forwarder = baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt, args.reporter, args.reporteropt)
     except Exception as a:
         logger_name = "notificationforwarder_"+args.forwarder+("_"+args.forwardertag if args.forwardertag else "")
         logger = logging.getLogger(logger_name)

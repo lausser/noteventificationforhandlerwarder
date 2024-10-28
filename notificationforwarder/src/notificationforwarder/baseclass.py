@@ -23,7 +23,7 @@ from coshsh.util import setup_logging
 
 logger = None
 
-def new(target_name, tag, formatter, verbose, debug, forwarderopts):
+def new(target_name, tag, formatter, verbose, debug, forwarderopts, reporter, reporteropts):
 
     forwarder_name = target_name + ("_"+tag if tag else "")
     if verbose:
@@ -71,6 +71,8 @@ def new(target_name, tag, formatter, verbose, debug, forwarderopts):
             instance.tag = tag
         instance.forwarder_name = forwarder_name
         instance.formatter_name = formatter
+        instance.reporter_name = reporter
+        instance.reporter_opts = reporteropts
         instance.max_spool_minutes = max_spool_minutes
         instance.init_paths()
         instance.init_db()
@@ -89,6 +91,9 @@ def new(target_name, tag, formatter, verbose, debug, forwarderopts):
     return instance
 
 class ForwarderTimeoutError(Exception):
+    pass
+
+class ReporterTimeoutError(Exception):
     pass
 
 def timeout(seconds, error_message="Timeout"):
@@ -155,7 +160,25 @@ class NotificationForwarder(object):
             logger.critical("found no formatter module {}".format(module_name))
             return None
         except Exception as e:
-            logger.critical("unknown error error in formatter instntiation: {}".format(e))
+            logger.critical("unknown error error in formatter instantiation: {}".format(e))
+            return None
+
+    def new_reporter(self, opts):
+        print("KAKKK {}".format(opts))
+        try:
+            module_name = self.reporter_name
+            class_name = "".join([x.title() for x in self.reporter_name.split("_")])+"Reporter"
+            reporter_module = import_module('.reporter', package='notificationforwarder.'+module_name)
+            reporter_module.logger = logger
+            reporter_class = getattr(reporter_module, class_name)
+            instance = reporter_class(*opts)
+            instance.__module_file__ = reporter_module.__file__
+            return instance
+        except ImportError:
+            logger.critical("found no reporter module {}".format(module_name))
+            return None
+        except Exception as e:
+            logger.critical("unknown error error in reporter instantiation: {}".format(e))
             return None
 
     def probe(self):
@@ -169,23 +192,7 @@ class NotificationForwarder(object):
 
     def format_event(self, raw_event):
         instance = self.new_formatter()
-        if not "omd_site" in raw_event:
-            raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
-        raw_event["omd_originating_host"] = socket.gethostname()
-        raw_event["omd_originating_fqdn"] = socket.getfqdn()
-        raw_event["omd_originating_timestamp"] = int(time.time())
         try:
-            empty_macros = []
-            for macro in raw_event:
-                # remove all the macros which have not been given a value
-                # by the nagios config
-                raw_event[macro] = str(raw_event[macro])
-                if raw_event[macro] == "$":
-                    empty_macros.append(macro)
-                elif re.search(r'^\$\w+\$', raw_event[macro]):
-                    empty_macros.append(macro)
-            for macro in empty_macros:
-                del raw_event[macro]
             formatted_event = FormattedEvent(raw_event)
             instance.format_event(formatted_event)
             return formatted_event
@@ -193,9 +200,20 @@ class NotificationForwarder(object):
             logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
             return None
 
+    def report_event(self, raw_event):
+        print("SCHEISSSS {}".format(self.reporter_opts))
+        instance = self.new_reporter(self.reporter_opts)
+        try:
+            instance.report_event(raw_event)
+            return raw_event
+        except Exception as e:
+            logger.critical("when reporting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+            return None
+
     def forward(self, raw_event):
         try:
-            formatted_event = self.format_event(raw_event)
+            enriched_event = self.enrich_raw_event(raw_event)
+            formatted_event = self.format_event(enriched_event)
             if formatted_event.is_discarded:
                 if not formatted_event.is_discarded_silently:
                     if not formatted_event.summary:
@@ -215,6 +233,32 @@ class NotificationForwarder(object):
             success = self.forward_formatted(formatted_event)
             if not success and not formatted_event.is_heartbeat:
                 self.spool(raw_event)
+            if self.reporter_name:
+                enriched_event["forwarder_name"] = self.forwarder_name
+                enriched_event["forwarder_tag"] = self.tag if hasattr(self, "tag") else ""
+                enriched_event["forwarder_success"] = success
+                enriched_event["formatter_name"] = self.formatter_name
+                enriched_event["formatter_summary"] = formatted_event.summary
+                self.report_event(enriched_event)
+
+    def enrich_raw_event(self, raw_event):
+        if not "omd_site" in raw_event:
+            raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
+        raw_event["omd_originating_host"] = socket.gethostname()
+        raw_event["omd_originating_fqdn"] = socket.getfqdn()
+        raw_event["omd_originating_timestamp"] = int(time.time())
+        empty_macros = []
+        for macro in raw_event:
+            # remove all the macros which have not been given a value
+            # by the nagios config
+            raw_event[macro] = str(raw_event[macro])
+            if raw_event[macro] == "$":
+                empty_macros.append(macro)
+            elif re.search(r'^\$\w+\$', raw_event[macro]):
+                empty_macros.append(macro)
+        for macro in empty_macros:
+            del raw_event[macro]
+        return raw_event
 
     def forward_formatted(self, formatted_event):
         try:
@@ -351,6 +395,7 @@ class NotificationForwarder(object):
             # don't care, we're finished anyway
             pass
     
+
 class NotificationFormatter(metaclass=ABCMeta):
     @abstractmethod
     def format_event(self):
@@ -419,3 +464,17 @@ class FormattedEvent(metaclass=ABCMeta):
     def discard(self, silently=True):
         self._discarded = True
         self._discarded_silently = True if silently else False
+
+
+class NotificationReporter(metaclass=ABCMeta):
+    def __init__(self, reporteropts):
+        self._reporteropts = reporteropts
+
+    @abstractmethod
+    def report_event(self, raw_event):
+        # raw_event contains:
+        # - forwarder_success
+        # - formatter_summary
+        pass
+
+
