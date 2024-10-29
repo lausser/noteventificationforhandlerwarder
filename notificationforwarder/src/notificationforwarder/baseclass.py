@@ -23,7 +23,7 @@ from coshsh.util import setup_logging
 
 logger = None
 
-def new(target_name, tag, formatter, verbose, debug, forwarderopts, reporter, reporteropts):
+def new(target_name, tag, formatter_name, verbose, debug, forwarder_opts, reporter_name=None, reporter_opts={}):
 
     forwarder_name = target_name + ("_"+tag if tag else "")
     if verbose:
@@ -37,16 +37,16 @@ def new(target_name, tag, formatter, verbose, debug, forwarderopts, reporter, re
         txtloglevel = logging.INFO
     logger_name = "notificationforwarder_"+forwarder_name
 
-    if "logfile_backups" in forwarderopts:
-        backup_count = int(forwarderopts["logfile_backups"])
-        del forwarderopts["logfile_backups"]
+    if "logfile_backups" in forwarder_opts:
+        backup_count = int(forwarder_opts["logfile_backups"])
+        del forwarder_opts["logfile_backups"]
     elif "NOTIFICATIONFORWARDER_LOGFILE_BACKUPS" in os.environ:
         backup_count = int(os.environ["NOTIFICATIONFORWARDER_LOGFILE_BACKUPS"])
     else:
         backup_count = 3
-    if "max_spool_minutes" in forwarderopts:
-        max_spool_minutes = forwarderopts["max_spool_minutes"]
-        del forwarderopts["max_spool_minutes"]
+    if "max_spool_minutes" in forwarder_opts:
+        max_spool_minutes = forwarder_opts["max_spool_minutes"]
+        del forwarder_opts["max_spool_minutes"]
     elif "NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES" in os.environ:
         max_spool_minutes = os.environ["NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES"]
     else:
@@ -64,15 +64,15 @@ def new(target_name, tag, formatter, verbose, debug, forwarderopts, reporter, re
         forwarder_module = import_module('notificationforwarder.'+module_name+'.forwarder', package='notificationforwarder.'+module_name)
         forwarder_class = getattr(forwarder_module, class_name)
 
-        instance = forwarder_class(forwarderopts)
+        instance = forwarder_class(forwarder_opts)
         instance.__module_file__ = forwarder_module.__file__
         instance.name = target_name
         if tag:
             instance.tag = tag
         instance.forwarder_name = forwarder_name
-        instance.formatter_name = formatter
-        instance.reporter_name = reporter
-        instance.reporter_opts = reporteropts
+        instance.formatter_name = formatter_name
+        instance.reporter_name = reporter_name
+        instance.reporter_opts = reporter_opts
         instance.max_spool_minutes = max_spool_minutes
         instance.init_paths()
         instance.init_db()
@@ -164,14 +164,13 @@ class NotificationForwarder(object):
             return None
 
     def new_reporter(self, opts):
-        print("KAKKK {}".format(opts))
         try:
             module_name = self.reporter_name
             class_name = "".join([x.title() for x in self.reporter_name.split("_")])+"Reporter"
             reporter_module = import_module('.reporter', package='notificationforwarder.'+module_name)
             reporter_module.logger = logger
             reporter_class = getattr(reporter_module, class_name)
-            instance = reporter_class(*opts)
+            instance = reporter_class(opts)
             instance.__module_file__ = reporter_module.__file__
             return instance
         except ImportError:
@@ -206,14 +205,15 @@ class NotificationForwarder(object):
             logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
             return None
 
-    def report_event(self, raw_event):
-        print("SCHEISSSS {}".format(self.reporter_opts))
+    def report_event(self, formatted_event):
         instance = self.new_reporter(self.reporter_opts)
         try:
-            instance.report_event(raw_event)
-            return raw_event
+            instance.report_event(formatted_event)
         except Exception as e:
-            logger.critical("when reporting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+            if instance:
+                logger.critical("when reporting this {} with this {} there was an error <{}>".format(str(formatted_event.eventopts), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+            else:
+                logger.critical("could not create a {} reporter instance with {}".format(self.reporter_name, self.reporter_opts))
             return None
 
     def forward(self, raw_event):
@@ -240,12 +240,12 @@ class NotificationForwarder(object):
             if not success and not formatted_event.is_heartbeat:
                 self.spool(raw_event)
             if self.reporter_name:
-                enriched_event["forwarder_name"] = self.forwarder_name
-                enriched_event["forwarder_tag"] = self.tag if hasattr(self, "tag") else ""
-                enriched_event["forwarder_success"] = success
-                enriched_event["formatter_name"] = self.formatter_name
-                enriched_event["formatter_summary"] = formatted_event.summary
-                self.report_event(enriched_event)
+                formatted_event.eventopts["forwarder_name"] = self.forwarder_name
+                formatted_event.eventopts["forwarder_tag"] = self.tag if hasattr(self, "tag") else ""
+                formatted_event.eventopts["forwarder_success"] = success
+                formatted_event.eventopts["formatter_name"] = self.formatter_name
+                formatted_event.eventopts["formatter_summary"] = formatted_event.summary
+                self.report_event(formatted_event)
 
     def enrich_raw_event(self, raw_event):
         if not "omd_site" in raw_event:
@@ -414,7 +414,7 @@ class FormattedEvent(metaclass=ABCMeta):
         self._eventopts = eventopts
         self._payload = None
         self._summary = None
-        self._forwarderopts = {}
+        self._forwarder_opts = {}
         self._discarded = False
         self._discarded_silently = True
 
@@ -448,11 +448,11 @@ class FormattedEvent(metaclass=ABCMeta):
 
     @property
     def forwarderopts(self):
-        return self._forwarderopts
+        return self._forwarder_opts
 
     @forwarderopts.setter
-    def forwarderopts(self, forwarderopts):
-        self._forwarderopts = forwarderopts
+    def forwarderopts(self, forwarder_opts):
+        self._forwarder_opts = forwarder_opts
 
     @property
     def is_discarded_silently(self):
@@ -473,14 +473,12 @@ class FormattedEvent(metaclass=ABCMeta):
 
 
 class NotificationReporter(metaclass=ABCMeta):
-    def __init__(self, reporteropts):
-        self._reporteropts = reporteropts
+    def __init__(self, reporter_opts):
+        for opt in reporter_opts:
+            setattr(self, opt, reporter_opts[opt])
 
     @abstractmethod
-    def report_event(self, raw_event):
-        # raw_event contains:
-        # - forwarder_success
-        # - formatter_summary
+    def report_event(self, formatted_event):
         pass
 
 

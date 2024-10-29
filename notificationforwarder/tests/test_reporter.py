@@ -1,5 +1,5 @@
 import pytest
-OMD_SITE=my_devel_site PYTHONPATH=`pwd`/src bin/notificationforwarder --eventopt HOSTNAME=kak --eventopt HOSTSTATE=UP --eventopt HOSTOUTPUT="kak"  --reporter naemonlog --reporteropt api=cmd --forwarderopt port=123 --eventopt SERVICEDESC="show the kak of kak" --eventopt SERVICESTATE=CRITICAL --eventopt SERVICEOUTPUT="i bin kak"
+#OMD_SITE=my_devel_site PYTHONPATH=`pwd`/src bin/notificationforwarder --eventopt HOSTNAME=kak --eventopt HOSTSTATE=UP --eventopt HOSTOUTPUT="kak"  --reporter naemonlog --reporteropt api=cmd --forwarderopt port=123 --eventopt SERVICEDESC="show the kak of kak" --eventopt SERVICESTATE=CRITICAL --eventopt SERVICEOUTPUT="i bin kak"
 
 import http.server
 import inspect
@@ -40,6 +40,8 @@ def _setup():
         os.remove("/tmp/notificationforwarder_example.txt")
     if os.path.exists("/tmp/received_payload.json"):
         os.remove("/tmp/received_payload.json")
+    if os.path.exists(omd_root+"/var/tmp/naemon.cmd"):
+        os.remove(omd_root+"/var/tmp/naemon.cmd")
 
 def get_logfile(forwarder):
     logger_name = "notificationforwarder_"+forwarder.name
@@ -126,96 +128,6 @@ def xtest_send_json_payload_to_server(server_fixture):
 
     assert saved_payload == data
 
-def test_forward_webhook_format_rabbitmq(server_fixture):
-    signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    reveiveropts = {
-        "url": "http://localhost:8080/api/v1",
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-    }   
-    eventopts = {
-        "HOSTNAME": "vongsrv01",
-        "NOTIFICATIONTYPE": "PROBLEM",
-        "HOSTSTATE": "DOWN",
-        "HOSTOUTPUT": "i bim der host un mir is schlecht i kotz hex "+signature,
-        "description": "halo i bims 1 alarm vong naemon her",
-    }
-
-    webhook = notificationforwarder.baseclass.new("webhook", None, "rabbitmq", True, True,  reveiveropts)
-    webhook.forward(eventopts)
-    log = open(get_logfile(webhook)).read()
-    assert "INFO - success:" in log 
-    assert signature in log 
-    with open("/tmp/received_payload.json") as f:
-        payload = f.read()
-    payload = json.loads(payload)
-    assert payload[0]["output"] == "i bim der host un mir is schlecht i kotz hex "+signature
-
-def test_forward_webhook_format_example(server_fixture):
-    signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-    reveiveropts = {
-        "url": "http://localhost:8080",
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-    }   
-    eventopts = {
-        "signature": signature,
-        "description": "halo i bims 1 alarm vong naemon her",
-    }
-
-    webhook = notificationforwarder.baseclass.new("webhook", None, "example", True, True,  reveiveropts)
-    webhook.forward(eventopts)
-    log = open(get_logfile(webhook)).read()
-    assert "INFO - success: sum: "+eventopts["description"] in log 
-    with open("/tmp/received_payload.json") as f:
-        payload = f.read()
-    payload = json.loads(payload)
-    assert payload["signature"] == signature
-    assert payload["description"] == eventopts["description"]
-    assert "timestamp" in payload
-
-def test_forward_webhook_format_vong(server_fixture):
-    reveiveropts = {
-        "url": "http://localhost:8080",
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-    }   
-    eventopts = {
-        "HOSTNAME": "vongsrv01",
-        "HOSTSTATE": "DOWN",
-        "NOTIFICATIONTYPE": "PROBLEM",
-    }
-
-    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
-    webhook.forward(eventopts)
-    log = open(get_logfile(webhook)).read()
-    assert "INFO - success: i hab dem post gepost" in log 
-    with open("/tmp/received_payload.json") as f:
-        payload = f.read()
-    payload = json.loads(payload)
-    assert "host_name" in payload
-
-def test_forward_webhook_format_bayern(server_fixture):
-    reveiveropts = {
-        "url": "http://localhost:8080",
-        "username": "i_bims",
-        "password": "i_bims_1_i_bims",
-    }   
-    eventopts = {
-        "HOSTNAME": "seppsrv01",
-        "HOSTSTATE": "DOWN",
-        "NOTIFICATIONTYPE": "PROBLEM",
-    }
-
-    webhook = notificationforwarder.baseclass.new("webhook", None, "bayern", True, True,  reveiveropts)
-    webhook.forward(eventopts)
-    log = open(get_logfile(webhook)).read()
-    assert "INFO - success: des glump {} is hi".format(eventopts["HOSTNAME"]) in log
-    with open("/tmp/received_payload.json") as f:
-        payload = f.read()
-    payload = json.loads(payload)
-    assert "da_host" in payload
-
 def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     reveiveropts = {
         "url": "http://localhost:8080",
@@ -225,71 +137,49 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     eventopts = {
         "HOSTNAME": "vongsrv02",
         "HOSTSTATE": "DOWN",
+        "HOSTOUTPUT": "aechz",
         "NOTIFICATIONTYPE": "PROBLEM",
     }
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
     reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file), shell=True)
     log = open(get_logfile(webhook)).read()
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
     assert payload["host_name"] == "vongsrv02"
+    with open(command_file) as f:
+        naemonlog = f.read()
+    assert "HOST NOTIFICATION: global;vongsrv02;globalcmd;DOWN;aechz" in naemonlog
 
-def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
-    # auth with token, token is in forwarderopts
-    reveiveropts = {
-        "url": "http://localhost:8080",
-        "headers": '{"Authorization": "Bearer i_bims_1_token"}',
-    }   
-    eventopts = {
-        "HOSTNAME": "vongsrv03",
-        "HOSTSTATE": "DOWN",
-        "NOTIFICATIONTYPE": "PROBLEM",
-    }
-    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
-    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
-    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
-    reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
-    eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
-    #raise
-    log = open(get_logfile(webhook)).read()
-    with open("/tmp/received_payload.json") as f:
-        payload = f.read()
-    payload = json.loads(payload)
-    assert payload["host_name"] == "vongsrv03"
-
-def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture):
-    # auth with token, token is created by the formatter
+def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
     reveiveropts = {
         "url": "http://localhost:8080",
         "username": "i_bims",
-        "password": "i_bims_1_i_bims",
+        "password": "i_bums_1_i_bums",
     }   
     eventopts = {
-        "HOSTNAME": "vongsrv04",
+        "HOSTNAME": "vongsrv02",
         "HOSTSTATE": "DOWN",
+        "HOSTOUTPUT": "aechz",
         "NOTIFICATIONTYPE": "PROBLEM",
-        # if this key exists, then the formatter fills the header
-        # event.forwarderopts["headers"] = '{{"Authorization":
-        "dem_is_geheim": "i_bims_1_token",
     }
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
     reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file), shell=True)
     log = open(get_logfile(webhook)).read()
-    with open("/tmp/received_payload.json") as f:
-        payload = f.read()
-    payload = json.loads(payload)
-    assert payload["host_name"] == "vongsrv04"
+    assert not os.path.exists("/tmp/received_payload.json")
+    with open(command_file) as f:
+        naemonlog = f.read()
+    assert "HOST NOTIFICATION: global;vongsrv02;globalcmd;DOWN;aechz (could not be forwarded to webhook)" in naemonlog
 
