@@ -145,6 +145,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
+    pathlib.Path(command_file).touch()
     reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
     print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file))
