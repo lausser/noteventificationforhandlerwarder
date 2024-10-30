@@ -2,7 +2,8 @@
 
 In this framework, two aspects are in the focus. How to transport a notification to the recipient system and in which format.
 In the beginning, Naemon or one of the other monitoring cores will execute a command line. The actual script and the individual command line parameters are defined in a command definition. Typical parameters are (i use the notation of Nagios macros) HOSTNAME, SERVICEDESC, SERVICESTATE, SERVICEOUTPUT. These snippets need to be put together to some kind of payload suitable for the receiving system. And then this payload must be transported to it. We call the two components *formatter* and *forwarder*. The formatter takes the raw input data and creates a payload and the forwarder transmits the payload to the destination.
-What the framework does for you behind the scenes. When forwarding to a recipient fails, the event is saved in a local sqlite database for a certain time and re-sent when the script is called next time and the recipient is available again. Logging of successful and of course faile deliveries is also done automatically.
+What the framework does for you behind the scenes: When forwarding to a recipient fails, the event is saved in a local sqlite database for a certain time and re-sent when the script is called next time and the recipient is available again. Logging of successful and of course failed deliveries is also done automatically.  
+There is also a component *reporter* which will rarely be used. It's purpose is to run additional code after a successful or failed delivery.  
 
 Let me list some of the formatter/forwarder combinations which are usually found in enterprise environments:
 
@@ -38,7 +39,7 @@ define command{
                         --eventopt SERVICESTATE='$SERVICESTATE$' \
                         --eventopt SERVICEOUTPUT='$SERVICEOUTPUT$' \
                         --eventopt LONGSERVICEOUTPUT='$LONGSERVICEOUTPUT$' \
-                    >> $USER4$/var/log/notificationforwarder_victorops.log 2>&1
+                    >> $USER4$/var/log/notificationforwarder_errors.log 2>&1
 }
 ```
 Your service notifications should be sent to some ticket tool. The notification script will talk to a REST api and upload a a well-formatted Json payload. Therefore the notifcation framework has two jobs. 
@@ -171,7 +172,7 @@ define command {
                      --eventopt SERVICESTATE='$SERVICESTATE$' \
                      --eventopt SERVICEOUTPUT='$SERVICEOUTPUT$' \
                      --eventopt LONGSERVICEOUTPUT='$LONGSERVICEOUTPUT$' \
-                     >> $USER4$/var/log/notificationforwarder_webhook.log 2>&1
+                     >> $USER4$/var/log/notificationforwarder_errors.log 2>&1
 }
 
 define command {
@@ -184,7 +185,7 @@ define command {
                      --eventopt HOSTSTATE='$HOSTSTATE$' \
                      --eventopt HOSTADDRESS='$HOSTADDRESS$' \
                      --eventopt HOSTOUTPUT='$HOSTOUTPUT$' \
-                     >> $USER4$/var/log/notificationforwarder_webhook.log 2>&1
+                     >> $USER4$/var/log/notificationforwarder_errors.log 2>&1
 }
 ```
 
@@ -238,5 +239,32 @@ There is also a SyslogFormatter, which creates the log line as:
 *host: \<HOSTNAME\>, service: \<SERVICEDESC\>, state: \<SERVICESTATE\>, output: \<SERVICEOUTPUT\>*
 
 If you want a different format, then copy *lib/python/notificationforwarder/syslog/formatter.py* to *local/lib/python/notificationforwarder/syslog/formatter.py* and modify it like you want. Or, with *--formatter*, you can use whatever formatter is suitable, as long as it's payload attribute consists of a line of text.
+
+## Reporters
+
+Like *forwarder* and *formatter*, a *reporter* is an instance of a *NotificationReporter* class defined in a file named *reporter.py*. There is one class coming with notificationforwarder, the *NaemonlogReporter*. It's purpose it to write a message to the Naemon logfile. When notificationforwarder is run as a standalone script (and not triggered as a notificationhandler by Naemon), the *NaemonlogReporter* can nevertheless leave a line in the Naemon log.  
+Or you can write an extra log showing success or failure of the notification delivery.
+
+```
+define command{
+    command_name    notify-service-servicenow
+    command_line    $USER1$/notificationforwarder \
+                        --forwarder webhook \
+                        --forwarderopt username='$_CONTACTUSERNAME$' \
+                        --forwarderopt password='$_CONTACTPASSWORD$' \
+                        --forwarderopt url='$_CONTACTURL$' \
+...
+                        --eventopt HOSTNAME='$HOSTNAME$' \
+                        --eventopt HOSTSTATE='$HOSTSTATE$' \
+                        --eventopt HOSTADDRESS='$HOSTADDRESS$' \
+                        --eventopt SERVICEDESC='$SERVICEDESC$' \
+                        --eventopt SERVICESTATE='$SERVICESTATE$' \
+                        --eventopt SERVICEOUTPUT='$SERVICEOUTPUT$' \
+                        --eventopt LONGSERVICEOUTPUT='$LONGSERVICEOUTPUT$' \
+....
+                        --reporter naemonlog \
+                    >> $USER4$/var/log/notificationforwarder_errors.log 2>&1
+}
+```
 
 
