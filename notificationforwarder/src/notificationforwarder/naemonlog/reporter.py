@@ -13,7 +13,7 @@ class NaemonlogReporter(NotificationReporter):
         if not "CONTACTNAME" in event.eventopts:
             event.eventopts["CONTACTNAME"] = "GLOBAL"
         if not "NOTIFICATIONCOMMAND" in event.eventopts:
-            event.eventopts["NOTIFICATIONCOMMAND"] = "global_{}_notification_handler"i.format("service" if "SERVICEDESC" in event.eventopts else "host")
+            event.eventopts["NOTIFICATIONCOMMAND"] = "global_{}_notification_handler".format("service" if "SERVICEDESC" in event.eventopts else "host")
         if "SERVICEDESC" in event.eventopts:
             text = "SERVICE NOTIFICATION: {};{};{};{};{};{}".format(event.eventopts["CONTACTNAME"], event.eventopts["HOSTNAME"], event.eventopts["SERVICEDESC"], event.eventopts["NOTIFICATIONCOMMAND"], event.eventopts["SERVICESTATE"], event.eventopts["SERVICEOUTPUT"])
         else:
