@@ -117,17 +117,6 @@ def server_fixture(request):
     request.addfinalizer(fin)
     return server
 
-def xtest_send_json_payload_to_server(server_fixture):
-    url = "http://localhost:8080"
-    data = {"key": "value", "another_key": "another_value"}
-
-    response = requests.post(url, json=data)
-    assert response.status_code == 200
-
-    with open('/tmp/received_payload.json', 'rb') as json_file:
-        saved_payload = json.load(json_file)
-
-    assert saved_payload == data
 
 def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     reveiveropts = {
@@ -140,6 +129,8 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
         "HOSTSTATE": "DOWN",
         "HOSTOUTPUT": "aechz",
         "NOTIFICATIONTYPE": "PROBLEM",
+        "CONTACTNAME": "da_daepp",
+        "NOTIFICATIONCOMMAND": "kommando_pimperle",
     }
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
@@ -157,7 +148,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     assert payload["host_name"] == "vongsrv02"
     with open(command_file) as f:
         naemonlog = f.read()
-    assert "HOST NOTIFICATION: global;vongsrv02;globalcmd;DOWN;aechz" in naemonlog
+    assert "HOST NOTIFICATION: da_daepp;vongsrv02;kommando_pimperle;DOWN;aechz" in naemonlog
 
 def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
     reveiveropts = {
@@ -170,6 +161,8 @@ def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
         "HOSTSTATE": "DOWN",
         "HOSTOUTPUT": "aechz",
         "NOTIFICATIONTYPE": "PROBLEM",
+        #"CONTACTNAME": default GLOBAL
+        #"NOTIFICATIONCOMMAND": default global_host_notification_handler
     }
     webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
@@ -184,5 +177,5 @@ def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
     assert not os.path.exists("/tmp/received_payload.json")
     with open(command_file) as f:
         naemonlog = f.read()
-    assert "HOST NOTIFICATION: global;vongsrv02;globalcmd;DOWN;aechz (could not be forwarded to webhook)" in naemonlog
+    assert "HOST NOTIFICATION: GLOBAL;vongsrv02;global_host_notification_handler;DOWN;aechz (could not be forwarded to webhook)" in naemonlog
 
