@@ -257,12 +257,13 @@ class NotificationForwarder(object):
         for macro in raw_event:
             # remove all the macros which have not been given a value
             # by the nagios config
-            if not isinstance(raw_event[macro], dict) and not isinstance(raw_event[macro], list):
-                raw_event[macro] = str(raw_event[macro])
-                if raw_event[macro] == "$":
-                    empty_macros.append(macro)
-                elif re.search(r'^\$\w+\$', raw_event[macro]):
-                    empty_macros.append(macro)
+            if isinstance(raw_event[macro], dict) or isinstance(raw_event[macro], list):
+                continue
+            raw_event[macro] = str(raw_event[macro])
+            if raw_event[macro] == "$":
+                empty_macros.append(macro)
+            elif re.search(r'^\$\w+\$', raw_event[macro]):
+                empty_macros.append(macro)
         for macro in empty_macros:
             del raw_event[macro]
         return raw_event
