@@ -372,7 +372,7 @@ class NotificationForwarder(object):
         sql_select = "SELECT id, payload FROM "+self.table_name+" ORDER BY id LIMIT 10"
         sql_delete_id = "DELETE FROM "+self.table_name+" WHERE id = ?"
         with open(self.db_lock_file, "w") as lock_file:
-            locked = acquire_lock_with_retry(lock_file)
+            locked = self.acquire_lock_with_retry(lock_file)
             if locked:
                 try:
                     outdated = int(time.time() - 60*self.max_spool_minutes)

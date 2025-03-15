@@ -39,3 +39,6 @@ class ExampleForwarder(NotificationForwarder):
         else:
            logger.critical("could not connect to the ticket system")
            return False
+
+    def probe(self):
+        return True
