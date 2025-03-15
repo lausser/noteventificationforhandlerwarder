@@ -5,9 +5,11 @@ import socket
 import traceback
 import signal
 import functools
+import threading
 import errno
 import fcntl
 import time
+import random
 import re
 try:
     import simplejson as json
@@ -96,21 +98,50 @@ class ForwarderTimeoutError(Exception):
 class ReporterTimeoutError(Exception):
     pass
 
+# this is my old implementation, which does not work
+# in multi-threaded environments (e.g. a webserver based on
+# bottle+waitress which listens for events and uses
+# the notificationforwarder to deliver them to a ticketing tool.
+#def timeout(seconds, error_message="Timeout"):
+#    def decorator(func):
+#        @functools.wraps(func)
+#        def wrapper(*args, **kwargs):
+#            def handler(signum, frame):
+#                raise ForwarderTimeoutError(error_message)
+#
+#            original_handler = signal.signal(signal.SIGALRM, handler)
+#            signal.alarm(seconds)
+#            try:
+#                result = func(*args, **kwargs)
+#            finally:
+#                signal.signal(signal.SIGALRM, original_handler)
+#                signal.alarm(0)
+#            return result
+#        return wrapper
+#    return decorator
+
+# this is the new implementation, which starts a second thread
+# which keeps an eye on the clock
 def timeout(seconds, error_message="Timeout"):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            def handler(signum, frame):
-                raise ForwarderTimeoutError(error_message)
+            result = [ForwarderTimeoutError(error_message)]
+            def target():
+                try:
+                    result[0] = func(*args, **kwargs)
+                except Exception as e:
+                    result[0] = e
 
-            original_handler = signal.signal(signal.SIGALRM, handler)
-            signal.alarm(seconds)
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.signal(signal.SIGALRM, original_handler)
-                signal.alarm(0)
-            return result
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(seconds)
+            if thread.is_alive():
+                raise ForwarderTimeoutError(error_message)
+            if isinstance(result[0], Exception):
+                raise result[0]
+            return result[0]
         return wrapper
     return decorator
 
@@ -139,7 +170,7 @@ class NotificationForwarder(object):
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             )"""
         try:
-            self.dbconn = sqlite3.connect(self.db_file)
+            self.dbconn = sqlite3.connect(self.db_file, check_same_thread=False)
             self.dbcurs = self.dbconn.cursor()
             self.dbcurs.execute(sql_create)
             self.dbconn.commit()
@@ -186,8 +217,10 @@ class NotificationForwarder(object):
         After failed attempts, when there are spooled events in the database,
         a call to probe() can tell the forwarder that the events now can
         be flushed.
+        By default it returns False, so that no unnecessary flush attempts
+        are made by forwarders without their own probe().
         """
-        return True
+        return False
 
     def format_event(self, raw_event):
         instance = self.new_formatter()
@@ -320,19 +353,26 @@ class NotificationForwarder(object):
             logger.critical("database error "+str(e))
             logger.info(raw_event)
 
+    def acquire_lock_with_retry(self, lock_file, max_attempts=3, base_delay=0.1):
+        for attempt in range(max_attempts):
+            try:
+                fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                logger.debug("flush lock set")
+                return True
+            except IOError as e:
+                logger.debug(f"flush lock failed (attempt {attempt + 1}): {str(e)}")
+                if attempt < max_attempts - 1:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
+                    time.sleep(delay)
+        return False
+
     def flush(self):
         sql_delete = "DELETE FROM "+self.table_name+" WHERE CAST(STRFTIME('%s', timestamp) AS INTEGER) < ?"
         sql_count = "SELECT COUNT(*) FROM "+self.table_name
         sql_select = "SELECT id, payload FROM "+self.table_name+" ORDER BY id LIMIT 10"
         sql_delete_id = "DELETE FROM "+self.table_name+" WHERE id = ?"
         with open(self.db_lock_file, "w") as lock_file:
-            try:
-                fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                logger.debug("flush lock set")
-                locked = True
-            except IOError as e:
-                logger.debug("flush lock failed: "+str(e))
-                locked = False
+            locked = acquire_lock_with_retry(lock_file)
             if locked:
                 try:
                     outdated = int(time.time() - 60*self.max_spool_minutes)
@@ -375,8 +415,8 @@ class NotificationForwarder(object):
                             last_events_to_flush = events_to_flush
                     self.dbconn.commit()
                 except Exception as e:
-                    logger.critical("database flush failed")
-                    logger.critical(e)
+                    logger.critical(f"database flush+resubmit failed: {e}")
+                fcntl.lockf(lock_file, fcntl.LOCK_UN)
             else:
                 logger.debug("missed the flush lock")
 
