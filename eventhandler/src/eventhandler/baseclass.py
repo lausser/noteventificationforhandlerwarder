@@ -83,17 +83,22 @@ def timeout(seconds, error_message="Timeout"):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            def handler(signum, frame):
-                raise RunnerTimeoutError(error_message)
+            result = [ForwarderTimeoutError(error_message)]
+            def target():
+                try:
+                    result[0] = func(*args, **kwargs)
+                except Exception as e:
+                    result[0] = e
 
-            original_handler = signal.signal(signal.SIGALRM, handler)
-            signal.alarm(seconds)
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.signal(signal.SIGALRM, original_handler)
-                signal.alarm(0)
-            return result
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(seconds)
+            if thread.is_alive():
+                raise ForwarderTimeoutError(error_message)
+            if isinstance(result[0], Exception):
+                raise result[0]
+            return result[0]
         return wrapper
     return decorator
 
