@@ -280,6 +280,18 @@ class NotificationForwarder(object):
                 formatted_event.eventopts["formatter_summary"] = formatted_event.summary
                 self.report_event(formatted_event)
 
+    def forward_multiple(self, raw_event):
+        # this method requires a formatter which implements a method split_events!
+        instance = self.new_formatter()
+        try:
+            raw_event_list = instance.split_events(raw_event)
+            instance = None
+            logger.debug(f"received a payload with {len(raw_event_list)} single events")
+            for raw_event in raw_event_list:
+                self.forward(raw_event)
+        except Exception as e:
+            logger.critical(f"error split_events failed for {raw_event}")
+
     def enrich_raw_event(self, raw_event):
         if not "omd_site" in raw_event:
             raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
@@ -447,6 +459,10 @@ class NotificationForwarder(object):
 class NotificationFormatter(metaclass=ABCMeta):
     @abstractmethod
     def format_event(self):
+        pass
+
+    @abstractmethod
+    def split_events(self):
         pass
 
 
