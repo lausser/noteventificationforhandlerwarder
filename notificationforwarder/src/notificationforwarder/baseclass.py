@@ -461,10 +461,6 @@ class NotificationFormatter(metaclass=ABCMeta):
     def format_event(self):
         pass
 
-    @abstractmethod
-    def split_events(self):
-        pass
-
 
 class FormattedEvent(metaclass=ABCMeta):
     def __init__(self, eventopts):
