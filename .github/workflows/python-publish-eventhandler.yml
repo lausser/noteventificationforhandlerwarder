@@ -71,7 +71,7 @@ jobs:
       #   sucht nach ls -A './eventhandler/*.whl'
       #   knallt mit IsADirectoryError: [Errno 21] Is a directory: '/github/workspace/eventhandler/dist'
       # 2 versuch mit packages-dir: ./eventhandler/dist
-      uses: pypa/gh-action-pypi-publish@v1.8.14
+      uses: pypa/gh-action-pypi-publish@v1.12.4
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN_eh }}
