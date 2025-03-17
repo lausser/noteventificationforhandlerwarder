@@ -211,17 +211,6 @@ class NotificationForwarder(object):
             logger.critical("unknown error error in reporter instantiation: {}".format(e))
             return None
 
-    def probe(self):
-        """Checks if a forwarder is principally able to submit an event.
-        It is mostly used to contact an api and confirm that it is alive.
-        After failed attempts, when there are spooled events in the database,
-        a call to probe() can tell the forwarder that the events now can
-        be flushed.
-        By default it returns False, so that no unnecessary flush attempts
-        are made by forwarders without their own probe().
-        """
-        return False
-
     def format_event(self, raw_event):
         instance = self.new_formatter()
         if not "omd_site" in raw_event:
@@ -315,7 +304,13 @@ class NotificationForwarder(object):
 
     def forward_formatted(self, formatted_event):
         try:
-            if self.num_spooled_events() and self.probe():
+            """probe() checks if a forwarder is principally capable to submit
+            an event. It is mostly used to contact an api and confirm that
+            it is alive. After failed attempts, when there are spooled events
+            in the database, a call to probe() returning True can tell the
+            forwarder that the events now can be flushed.
+            """
+            if self.num_spooled_events() and (not hasattr(self, "probe") or self.probe()):
                 self.flush()
         except Exception as e:
             logger.critical("flush probe failed with exception <{}>".format(str(e)))
