@@ -47,10 +47,10 @@ def new(target_name, tag, formatter_name, verbose, debug, forwarder_opts, report
     else:
         backup_count = 3
     if "max_spool_minutes" in forwarder_opts:
-        max_spool_minutes = forwarder_opts["max_spool_minutes"]
+        max_spool_minutes = int(forwarder_opts["max_spool_minutes"])
         del forwarder_opts["max_spool_minutes"]
     elif "NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES" in os.environ:
-        max_spool_minutes = os.environ["NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES"]
+        max_spool_minutes = int(os.environ.get("NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES", 5))
     else:
         max_spool_minutes = 5
 
