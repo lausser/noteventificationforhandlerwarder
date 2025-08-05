@@ -257,8 +257,18 @@ class NotificationForwarder(object):
             except NameError:
                 logger.critical("raw event {} caused error {}".format(str(raw_event), str(e)))
             formatted_event = None
+
         if formatted_event:
-            success = self.forward_formatted(formatted_event)
+            result = self.forward_formatted(formatted_event)
+            report_payload = {}
+            if isinstance(result, bool):
+                success = result
+            elif isinstance(result, dict):
+                success = result.get('success', False)
+                report_payload = result.get('report_payload', {})
+            else:
+                # Unexpected type; treat as failure
+                success = False
             if not success and not formatted_event.is_heartbeat:
                 self.spool(raw_event)
             if self.reporter_name:
@@ -267,7 +277,10 @@ class NotificationForwarder(object):
                 formatted_event.eventopts["forwarder_success"] = success
                 formatted_event.eventopts["formatter_name"] = self.formatter_name
                 formatted_event.eventopts["formatter_summary"] = formatted_event.summary
+                if report_payload:
+                    formatted_event.eventopts["forwarder_report_payload"] = report_payload
                 self.report_event(formatted_event)
+
 
     def forward_multiple(self, raw_event):
         # this method requires a formatter which implements a method split_events!
@@ -320,7 +333,20 @@ class NotificationForwarder(object):
             if formatted_event == None:
                 success = True
             else:
-                success = self.submit(formatted_event)
+                result = self.submit(formatted_event)
+                if isinstance(result, bool):
+                    success = result
+                elif isinstance(result, dict):
+                    success = result.get('success', False)
+                    report_payload = result.get('report_payload', {})
+                    if success and report_payload:
+                        # If forwarding was sucessful and we got
+                        # valuable information for the reporter, then
+                        # return a dict.
+                        success = result
+                else:
+                    # Unexpected type; treat as failure
+                    success = False
         except Exception as e:
             success = False
             format_exception_msg = str(e)
@@ -328,7 +354,7 @@ class NotificationForwarder(object):
         if success:
             if self.baseclass_logs_summary:
                 logger.info("forwarded {}".format(formatted_event.summary))
-            return True
+            return success
         else:
             if format_exception_msg:
                 logger.critical("forward failed with exception <{}>, spooled <{}>".format(format_exception_msg, formatted_event.summary))

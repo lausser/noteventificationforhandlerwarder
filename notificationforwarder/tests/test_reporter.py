@@ -119,7 +119,7 @@ def server_fixture(request):
 
 
 def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
-    reveiveropts = {
+    forwarderopts = {
         "url": "http://localhost:8080",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
@@ -132,15 +132,15 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
         "CONTACTNAME": "da_daepp",
         "NOTIFICATIONCOMMAND": "kommando_pimperle",
     }
-    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
+    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  forwarderopts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
     pathlib.Path(command_file).touch()
-    reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    forwarderoptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in forwarderopts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file), shell=True)
     log = open(get_logfile(webhook)).read()
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
@@ -151,7 +151,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     assert "HOST NOTIFICATION: da_daepp;vongsrv02;kommando_pimperle;DOWN;aechz" in naemonlog
 
 def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
-    reveiveropts = {
+    forwarderopts = {
         "url": "http://localhost:8080",
         "username": "i_bims",
         "password": "i_bums_1_i_bums",
@@ -164,18 +164,69 @@ def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
         #"CONTACTNAME": default GLOBAL
         #"NOTIFICATIONCOMMAND": default global_host_notification_handler
     }
-    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  reveiveropts)
+    webhook = notificationforwarder.baseclass.new("webhook", None, "vong", True, True,  forwarderopts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
     pathlib.Path(command_file).touch()
-    reveiveroptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in reveiveropts.items()])
+    forwarderoptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in forwarderopts.items()])
     eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
-    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file))
-    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, reveiveroptsparams, eventoptsparams, command_file), shell=True)
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder webhook {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file), shell=True)
     log = open(get_logfile(webhook)).read()
     assert not os.path.exists("/tmp/received_payload.json")
     with open(command_file) as f:
         naemonlog = f.read()
     assert "HOST NOTIFICATION: GLOBAL;vongsrv02;global_host_notification_handler;DOWN;aechz (could not be forwarded to webhook)" in naemonlog
 
+def test_reporter_payload_ok(server_fixture):
+    forwarderopts = {
+        "signature": "wrdlbrmpft"
+    }
+    eventopts = {
+        "HOSTNAME": "vongsrv02",
+        "HOSTSTATE": "DOWN",
+        "HOSTOUTPUT": "aechz",
+        "NOTIFICATIONTYPE": "PROBLEM",
+    }
+    cm = notificationforwarder.baseclass.new("ticketsystem", None, "vong", True, True,  forwarderopts)
+    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
+    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
+    assert not os.path.exists(command_file)
+    pathlib.Path(command_file).touch()
+    forwarderoptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in forwarderopts.items()])
+    eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder ticketsystem {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder ticketsystem {} --formatter vong {} --reporter ticketsystem --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file), shell=True)
+    log = open(get_logfile(cm)).read()
+    assert not os.path.exists("/tmp/received_payload.json")
+    with open(command_file) as f:
+        naemonlog = f.read()
+    assert "HOST NOTIFICATION: GLOBAL;vongsrv02;global_host_notification_handler;DOWN;aechz created INC00000000/wrdlbrmpft" in naemonlog
+
+def test_reporter_payload_fail(server_fixture):
+    forwarderopts = {
+        "nosignature": "wrdlbrmpft"
+    }
+    eventopts = {
+        "HOSTNAME": "vongsrv02",
+        "HOSTSTATE": "DOWN",
+        "HOSTOUTPUT": "aechz",
+        "NOTIFICATIONTYPE": "PROBLEM",
+    }
+    cm = notificationforwarder.baseclass.new("ticketsystem", None, "vong", True, True,  forwarderopts)
+    pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
+    cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
+    command_file = os.environ["OMD_ROOT"]+"/var/tmp/naemon.cmd"
+    assert not os.path.exists(command_file)
+    pathlib.Path(command_file).touch()
+    forwarderoptsparams = " ".join(["--forwarderopt {}='{}'".format(k, v) for k, v in forwarderopts.items()])
+    eventoptsparams = " ".join(["--eventopt {}='{}'".format(k, v) for k, v in eventopts.items()])
+    print("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder ticketsystem {} --formatter vong {} --reporter naemonlog --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file))
+    subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder ticketsystem {} --formatter vong {} --reporter ticketsystem --reporteropt command_file={}".format(omd_root, pythonpath, cmd, forwarderoptsparams, eventoptsparams, command_file), shell=True)
+    log = open(get_logfile(cm)).read()
+    assert not os.path.exists("/tmp/received_payload.json")
+    with open(command_file) as f:
+        naemonlog = f.read()
+    assert "HOST NOTIFICATION: GLOBAL;vongsrv02;global_host_notification_handler;DOWN;aechz (could not be forwarded to ticketsystem)" in naemonlog

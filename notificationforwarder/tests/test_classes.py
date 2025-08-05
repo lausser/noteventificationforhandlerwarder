@@ -32,11 +32,11 @@ def get_logfile(forwarder):
 
 
 def test_example_forwarder(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     assert example.__class__.__name__ == "ExampleForwarder"
     assert example.password == "dem_is_geheim"
     assert example.queued_events == []
@@ -83,14 +83,14 @@ def test_example_formatter_format_event(setup):
 
 
 def test_example_forwarder_forward(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     assert "INFO - i_bims submits" in log
@@ -101,7 +101,7 @@ def test_example_forwarder_forward(setup):
     _setup() # delete logfile
     # we need to reinitialize, because the logger has the (deleted) file
     # still open and further writes would end up in nirvana.
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her again",
     }
@@ -115,7 +115,7 @@ def test_example_forwarder_forward(setup):
     assert "INFO - forwarded sum: halo i bims 1 alarm vong naemon her" not in log
 
 def test_example_forwarder_forward_success(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }
@@ -124,7 +124,7 @@ def test_example_forwarder_forward_success(setup):
         "description": "halo i bims 1 alarm vong naemon her",
         "signature": signature,
     }
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     example.forward(eventopts)
     assert os.path.exists(example.signaturefile)
     sig = open(example.signaturefile).read().strip()
@@ -136,7 +136,7 @@ def test_example_forwarder_forward_timeout(setup):
         hashlib.sha256(secrets.token_bytes(32)).hexdigest(),
         hashlib.sha256(secrets.token_bytes(32)).hexdigest(),
     ]
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
         "delay": 60,
@@ -145,7 +145,7 @@ def test_example_forwarder_forward_timeout(setup):
         "description": "halo i bims 1 alarm vong naemon her",
         "signature": signatures[0],
     }
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     # this is the global log, written by the baseclass
@@ -156,14 +156,14 @@ def test_example_forwarder_forward_timeout(setup):
         "description": "halo i bim au 1 alarm vong naemon her",
         "signature": signatures[1],
     }
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     assert "spooled <sum: halo i bim au 1 alarm vong naemon her>" in log
     assert "WARNING - spooling queue length is 2" in log
     # now the last two events were spooled and are in the database
 
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
         "delay": 0,
@@ -172,7 +172,7 @@ def test_example_forwarder_forward_timeout(setup):
         "description": "i druecke dem spuelung",
         "signature": signatures[2],
     }
-    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  reveiveropts)
+    example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
     assert re.search(r'.*i_bims submits.*i druecke dem spuelung.*', log, re.MULTILINE)

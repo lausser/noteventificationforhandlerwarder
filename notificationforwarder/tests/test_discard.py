@@ -43,11 +43,11 @@ def get_logfile(forwarder):
 
 
 def test_discard_do_not_discard(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  forwarderopts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
@@ -60,11 +60,11 @@ def test_discard_do_not_discard(setup):
 
 
 def test_discard_discard_silently(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  forwarderopts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
@@ -78,11 +78,11 @@ def test_discard_discard_silently(setup):
 
 
 def test_discard_discard_with_own_comment(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  forwarderopts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
@@ -97,11 +97,11 @@ def test_discard_discard_with_own_comment(setup):
 
 
 def test_discard_discard_with_default_comment(setup):
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "discard", True, True,  forwarderopts)
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()

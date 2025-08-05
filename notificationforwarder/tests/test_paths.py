@@ -45,14 +45,14 @@ def test_split1_forwarder(setup):
     # lib            local/lib
     # forwarder      formatter
     print(sys.path)
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    split1 = notificationforwarder.baseclass.new("split1", None, "split1", True, True,  reveiveropts)
+    split1 = notificationforwarder.baseclass.new("split1", None, "split1", True, True,  forwarderopts)
     assert split1.__class__.__name__ == "Split1Forwarder"
     assert split1.__module_file__.endswith("pythonpath/lib/python/notificationforwarder/split1/forwarder.py")
     assert split1.password == "dem_is_geheim"
@@ -72,14 +72,14 @@ def test_split2_forwarder(setup):
     # forwarder      forwarder
     # formatter
     print(sys.path)
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    split2 = notificationforwarder.baseclass.new("split2", None, "split2", True, True,  reveiveropts)
+    split2 = notificationforwarder.baseclass.new("split2", None, "split2", True, True,  forwarderopts)
     assert split2.__class__.__name__ == "Split2Forwarder"
     assert split2.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split2/forwarder.py")
     assert split2.password == "dem_is_geheim"
@@ -99,14 +99,14 @@ def test_split3_forwarder(setup):
     # forwarder      forwarder
     # formatter      formatter
     print(sys.path)
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "split3", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "split3", True, True,  forwarderopts)
     assert split3.__class__.__name__ == "Split3Forwarder"
     assert split3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split3/forwarder.py")
     assert split3.password == "dem_is_geheim"

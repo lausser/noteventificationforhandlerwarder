@@ -45,14 +45,14 @@ def get_logfile(forwarder):
 def test_split1_forwarder(setup):
     # lib            local/lib
     # forwarder*     formatter*
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    split1 = notificationforwarder.baseclass.new("split1", None, "split4", True, True,  reveiveropts)
+    split1 = notificationforwarder.baseclass.new("split1", None, "split4", True, True,  forwarderopts)
     assert split1.__class__.__name__ == "Split1Forwarder"
     assert split1.__module_file__.endswith("pythonpath/lib/python/notificationforwarder/split1/forwarder.py")
     assert split1.password == "dem_is_geheim"
@@ -70,14 +70,14 @@ def test_split3_forwarder_split4_formatter(setup):
     # lib            local/lib
     # forwarder      forwarder*
     #                formatter*
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
     eventopts = {
         "description": "halo i bims 1 alarm vong naemon her",
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  forwarderopts)
     assert split3.__class__.__name__ == "Split3Forwarder"
     assert split3.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/split3/forwarder.py")
     assert split3.password == "dem_is_geheim"
@@ -93,11 +93,11 @@ def test_split3_forwarder_split4_formatter(setup):
 
 def test_split3_forwarder_split4_formatter_bin_old(setup):
     # this is used to find out the logfile
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  forwarderopts)
     # split4 formatter writes "split4_<optional signature>_split4" in the summary
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
@@ -109,11 +109,11 @@ def test_split3_forwarder_split4_formatter_bin_old(setup):
 
 def test_split3_forwarder_split4_formatter_bin(setup):
     # this is used to find out the logfile
-    reveiveropts = {
+    forwarderopts = {
         "username": "i_bims",
         "password": "dem_is_geheim"
     }
-    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  reveiveropts)
+    split3 = notificationforwarder.baseclass.new("split3", None, "split4", True, True,  forwarderopts)
     # split4 formatter writes "split4_<optional signature>_split4" in the summary
     pythonpath = os.environ["OMD_ROOT"]+"/../src:"+os.environ["OMD_ROOT"]+"/pythonpath/local/lib/python"+":"+os.environ["OMD_ROOT"]+"/pythonpath/lib/python"
     cmd = os.environ["OMD_ROOT"]+"/../bin/notificationforwarder"
