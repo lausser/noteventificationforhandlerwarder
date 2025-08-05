@@ -13,14 +13,14 @@ jobs:
   build-eventhandler:
 
     # nicht ubuntu-latest, weil da mindestens py3.6 fehlt
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./eventhandler
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.6.8", "3.7", "3.9", "3.10", "3.11", "3.12.0"]
+        python-version: ["3.7", "3.9", "3.10", "3.11", "3.12.0"]
 
     steps:
     - uses: actions/checkout@v3
