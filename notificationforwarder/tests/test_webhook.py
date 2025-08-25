@@ -294,25 +294,26 @@ def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture)
 def test_submit_form_with_xml_payload(server_fixture):
     from notificationforwarder.webhook import forwarder
 
-    # Example XML payload like in the curl command
     xml_payload = "<source>nagios</source><action>EskaMatrix</action><site>p100</site>"
 
-    event = forwarder.NotificationEvent(
-        payload=xml_payload,
-        forwarderopts={
+    # use dict just like the other tests
+    event = {
+        "payload": xml_payload,
+        "forwarderopts": {
             "url": server_fixture.url,
-            "mode": "form",
+            "mode": "form"
         },
-    )
+        "summary": "test xml payload"
+    }
 
     fwd = forwarder.Forwarder()
     fwd.submit(event)
 
-    # ensure the server saw the request
+    # ensure the server received the request
     assert len(server_fixture.requests) == 1
     req = server_fixture.requests[0]
 
-    # Content-Type should be form-encoded
+    # Content-Type should be form-urlencoded
     assert req.headers.get("Content-Type") == "application/x-www-form-urlencoded"
 
     # Body should contain the XML string as urlencoded "data=" field
