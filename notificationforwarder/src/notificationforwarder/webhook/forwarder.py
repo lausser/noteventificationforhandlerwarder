@@ -36,7 +36,22 @@ class WebhookForwarder(NotificationForwarder):
         # self.headers = 
         try:
             request_params = {}
-            request_params["json"] = event.payload
+            mode = event.forwarderopts.get("mode", "json")
+            if mode == "json":
+                request_params["json"] = event.payload
+            elif mode == "form":
+                if isinstance(event.payload, dict):
+                    request_params["data"] = event.payload
+                else:
+                    request_params["data"] = {"data": event.payload}
+            elif mode == "raw":
+                if isinstance(event.payload, (dict, list)):
+                    request_params["data"] = json.dumps(event.payload)
+                else:
+                    request_params["data"] = str(event.payload)
+            else:
+                raise ValueError(f"Unsupported forwarder mode: {mode}")
+
             if self.username and self.password:
                 request_params["auth"] = requests.auth.HTTPBasicAuth(self.username, self.password)
             if self.headers:
@@ -53,12 +68,16 @@ class WebhookForwarder(NotificationForwarder):
                 request_params["headers"].update(event.forwarderopts["headers"])
             if self.insecure == "yes":
                 request_params["verify"] = False
+
             if "headers" not in request_params:
-                request_params["headers"] = {
-                    "Content-type": "application/json"
-                }
-            elif "Content-type" not in request_params["headers"]:
-                request_params["headers"]["Content-type"] = "application/json"
+                request_params["headers"] = {}
+            if "Content-type" not in request_params["headers"]:
+                if mode == "json":
+                    request_params["headers"]["Content-Type"] = "application/json"
+                elif mode == "form":
+                    request_params["headers"]["Content-Type"] = "application/x-www-form-urlencoded"
+                elif mode == "raw":
+                    request_params["headers"]["Content-Type"] = "text/xml"
 
             response = requests.post(self.url, **request_params)
             if response.status_code in [requests.codes.ok, requests.codes.accepted, requests.codes.created]:

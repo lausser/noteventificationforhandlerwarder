@@ -291,3 +291,33 @@ def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture)
     payload = json.loads(payload)
     assert payload["host_name"] == "vongsrv04"
 
+def test_submit_form_with_xml_payload(server_fixture):
+    from notificationforwarder.webhook import forwarder
+
+    # Example XML payload like in the curl command
+    xml_payload = "<source>nagios</source><action>EskaMatrix</action><site>p100</site>"
+
+    event = forwarder.NotificationEvent(
+        payload=xml_payload,
+        forwarderopts={
+            "url": server_fixture.url,
+            "mode": "form",
+        },
+    )
+
+    fwd = forwarder.Forwarder()
+    fwd.submit(event)
+
+    # ensure the server saw the request
+    assert len(server_fixture.requests) == 1
+    req = server_fixture.requests[0]
+
+    # Content-Type should be form-encoded
+    assert req.headers.get("Content-Type") == "application/x-www-form-urlencoded"
+
+    # Body should contain the XML string as urlencoded "data=" field
+    body = req.body.decode()
+    assert "nagios" in body
+    assert "EskaMatrix" in body
+    assert "p100" in body
+
