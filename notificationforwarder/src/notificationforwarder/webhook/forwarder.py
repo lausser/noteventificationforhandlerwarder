@@ -71,7 +71,7 @@ class WebhookForwarder(NotificationForwarder):
 
             if "headers" not in request_params:
                 request_params["headers"] = {}
-            if "Content-type" not in request_params["headers"]:
+            if "content-type" not in [k.lower() for k in request_params["headers"]]:
                 if mode == "json":
                     request_params["headers"]["Content-Type"] = "application/json"
                 elif mode == "form":
@@ -97,4 +97,3 @@ class WebhookForwarder(NotificationForwarder):
         except Exception as e:
             logger.critical("POST had an exception: {}".format(str(e)))
             return False
-

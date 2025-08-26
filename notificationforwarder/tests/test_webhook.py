@@ -80,18 +80,35 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             return False
 
     def do_POST(self):
+        import urllib.parse
         headers = self.headers
         if not self.check_auth():
             return
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
-        with open('/tmp/received_payload.json', 'wb') as json_file:
-            json_file.write(post_data)
+        
+        content_type = self.headers.get('Content-Type', '')
+        
+        if 'application/json' in content_type:
+            with open('/tmp/received_payload.json', 'wb') as json_file:
+                json_file.write(post_data)
+        elif 'application/x-www-form-urlencoded' in content_type:
+            decoded_data = post_data.decode('utf-8')
+            parsed_data = urllib.parse.parse_qs(decoded_data)
+            # The user wants single values, not lists
+            single_value_data = {k: v[0] for k, v in parsed_data.items()}
+            with open('/tmp/received_payload.json', 'w') as json_file:
+                json.dump(single_value_data, json_file)
+        else:
+            # Default to writing raw data
+            with open('/tmp/received_payload.json', 'wb') as json_file:
+                json_file.write(post_data)
+
         self.send_response(200)
         self.end_headers()
 
 def start_server():
-    server = http.server.HTTPServer(('localhost', 8080), RequestHandler)
+    server = http.server.HTTPServer(('localhost', 18888), RequestHandler)
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
@@ -113,7 +130,7 @@ def server_fixture(request):
     return server
 
 def xtest_send_json_payload_to_server(server_fixture):
-    url = "http://localhost:8080"
+    url = "http://localhost:18888"
     data = {"key": "value", "another_key": "another_value"}
 
     response = requests.post(url, json=data)
@@ -127,7 +144,7 @@ def xtest_send_json_payload_to_server(server_fixture):
 def test_forward_webhook_format_rabbitmq(server_fixture):
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     forwarderopts = {
-        "url": "http://localhost:8080/api/v1",
+        "url": "http://localhost:18888/api/v1",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -152,7 +169,7 @@ def test_forward_webhook_format_rabbitmq(server_fixture):
 def test_forward_webhook_format_example(server_fixture):
     signature = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": "http://localhost:18888",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -174,7 +191,7 @@ def test_forward_webhook_format_example(server_fixture):
 
 def test_forward_webhook_format_vong(server_fixture):
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": "http://localhost:18888",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -195,7 +212,7 @@ def test_forward_webhook_format_vong(server_fixture):
 
 def test_forward_webhook_format_bayern(server_fixture):
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": "http://localhost:18888",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -216,7 +233,7 @@ def test_forward_webhook_format_bayern(server_fixture):
 
 def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": "http://localhost:18888",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -241,7 +258,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
 def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
     # auth with token, token is in forwarderopts
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": "http://localhost:18888",
         "headers": '{"Authorization": "Bearer i_bims_1_token"}',
     }   
     eventopts = {
@@ -266,7 +283,7 @@ def test_forward_webhook_format_vong_bin_token_auth(server_fixture):
 def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture):
     # auth with token, token is created by the formatter
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": "http://localhost:18888",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -292,33 +309,24 @@ def test_forward_webhook_format_vong_bin_token_auth_by_formatter(server_fixture)
     assert payload["host_name"] == "vongsrv04"
 
 def test_submit_form_with_xml_payload(server_fixture):
-    from notificationforwarder.webhook import forwarder
-
-    xml_payload = "<source>nagios</source><action>EskaMatrix</action><site>p100</site>"
-
-    # use dict just like the other tests
-    event = {
-        "payload": xml_payload,
-        "forwarderopts": {
-            "url": server_fixture.url,
-            "mode": "form"
-        },
-        "summary": "test xml payload"
+    forwarderopts = {
+        "url": "http://localhost:18888",
+        "mode": "form",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
+    }
+    eventopts = {
+        "source": "nagios",
+        "action": "EskaMatrix",
+        "site": "p100"
     }
 
-    fwd = forwarder.Forwarder()
-    fwd.submit(event)
+    webhook = notificationforwarder.baseclass.new("webhook", None, "datapost", True, True,  forwarderopts)
+    webhook.forward(eventopts)
 
-    # ensure the server received the request
-    assert len(server_fixture.requests) == 1
-    req = server_fixture.requests[0]
+    with open("/tmp/received_payload.json") as f:
+        payload = json.load(f)
 
-    # Content-Type should be form-urlencoded
-    assert req.headers.get("Content-Type") == "application/x-www-form-urlencoded"
-
-    # Body should contain the XML string as urlencoded "data=" field
-    body = req.body.decode()
-    assert "nagios" in body
-    assert "EskaMatrix" in body
-    assert "p100" in body
-
+    assert payload['source'] == "nagios"
+    assert payload['action'] == "EskaMatrix"
+    assert payload['site'] == "p100"
