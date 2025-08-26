@@ -96,6 +96,10 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             decoded_data = post_data.decode('utf-8')
             parsed_data = urllib.parse.parse_qs(decoded_data)
             # The user wants single values, not lists
+            # Weil urllib.parse.parse_qs liefert als value immer eine Liste.
+            # Kommt daher, daß man mehrmals den gleichen Key angeben kann
+            # abc=schmarrn&abc=kaas&xyz=glump wird zu
+            # abc: [schmarrn, kaas], xyz: [glump]
             single_value_data = {k: v[0] for k, v in parsed_data.items()}
             with open('/tmp/received_payload.json', 'w') as json_file:
                 json.dump(single_value_data, json_file)
