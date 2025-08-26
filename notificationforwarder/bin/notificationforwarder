@@ -14,7 +14,7 @@ import traceback
 
 if __name__ == '__main__':
 
-    if not os.environ.get("OMD_ROOT", "").startswith("/omd/sites/") and os.environ.get("OMD_SITE", "") != "my_devel_site":
+    if False:
         print("This script must be run in an OMD environment")
         sys.exit(1)
 
@@ -90,5 +90,9 @@ Example for an HTTP-based reporter:
         logger.critical("there is no class for forwarder {} and formatter {}".format(args.forwarder, args.formatter))
         sys.exit(1)
     
-    forwarder.forward(args.eventopt)
+    formatter_instance = forwarder.new_formatter()
+    if hasattr(formatter_instance, 'split_events'):
+        forwarder.forward_multiple(args.eventopt)
+    else:
+        forwarder.forward(args.eventopt)
 

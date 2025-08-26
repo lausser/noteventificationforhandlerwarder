@@ -90,8 +90,9 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
         content_type = self.headers.get('Content-Type', '')
         
         if 'application/json' in content_type:
-            with open('/tmp/received_payload.json', 'wb') as json_file:
+            with open('/tmp/received_payload.json', 'ab') as json_file:
                 json_file.write(post_data)
+                json_file.write(b'\n')
         elif 'application/x-www-form-urlencoded' in content_type:
             decoded_data = post_data.decode('utf-8')
             parsed_data = urllib.parse.parse_qs(decoded_data)
@@ -101,12 +102,14 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
             # abc=schmarrn&abc=kaas&xyz=glump wird zu
             # abc: [schmarrn, kaas], xyz: [glump]
             single_value_data = {k: v[0] for k, v in parsed_data.items()}
-            with open('/tmp/received_payload.json', 'w') as json_file:
+            with open('/tmp/received_payload.json', 'a') as json_file:
                 json.dump(single_value_data, json_file)
+                json_file.write('\n')
         else:
             # Default to writing raw data
-            with open('/tmp/received_payload.json', 'wb') as json_file:
+            with open('/tmp/received_payload.json', 'ab') as json_file:
                 json_file.write(post_data)
+                json_file.write(b'\n')
 
         self.send_response(200)
         self.end_headers()
@@ -229,7 +232,7 @@ def test_forward_webhook_format_bayern(server_fixture):
     webhook = notificationforwarder.baseclass.new("webhook", None, "bayern", True, True,  forwarderopts)
     webhook.forward(eventopts)
     log = open(get_logfile(webhook)).read()
-    assert "INFO - success: des glump {} is hi".format(eventopts["HOSTNAME"]) in log
+    assert "INFO - success: des glump "+eventopts["HOSTNAME"]+" is hi" in log
     with open("/tmp/received_payload.json") as f:
         payload = f.read()
     payload = json.loads(payload)
@@ -334,3 +337,92 @@ def test_submit_form_with_xml_payload(server_fixture):
     assert payload['source'] == "nagios"
     assert payload['action'] == "EskaMatrix"
     assert payload['site'] == "p100"
+
+def test_forward_multiple_events(server_fixture):
+    forwarderopts = {
+        "url": "http://localhost:18888",
+        "mode": "form",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
+    }
+    eventopts = {
+        "source": "nagios",
+        "action": "EskaMatrix",
+        "site": "p100"
+    }
+
+    webhook = notificationforwarder.baseclass.new("webhook", None, "datadup", True, True,  forwarderopts)
+    webhook.forward_multiple(eventopts)
+
+    # Read the two payloads from the file
+    received_payloads = []
+    with open("/tmp/received_payload.json", "r") as f:
+        for line in f:
+            if line.strip(): # Avoid empty lines
+                received_payloads.append(json.loads(line))
+
+    assert len(received_payloads) == 2
+
+    # Check the first event
+    assert received_payloads[0]['source'] == "nagios"
+    assert received_payloads[0]['action'] == "EskaMatrix"
+    assert received_payloads[0]['site'] == "p100"
+    assert received_payloads[0]['split_id'] == '1'
+
+    # Check the second event
+    assert received_payloads[1]['source'] == "nagios"
+    assert received_payloads[1]['action'] == "EskaMatrix"
+    assert received_payloads[1]['site'] == "p100"
+    assert received_payloads[1]['split_id'] == '2'
+
+def test_forward_multiple_events_bin(server_fixture):
+    forwarderopts = {
+        "url": "http://localhost:18888",
+        "mode": "form",
+        "username": "i_bims",
+        "password": "i_bims_1_i_bims",
+    }
+    eventopts = {
+        "source": "nagios",
+        "action": "EskaMatrix",
+        "site": "p100"
+    }
+
+    omd_root = os.environ["OMD_ROOT"]
+    pythonpath = omd_root+"/../src:"+omd_root+"/pythonpath/local/lib/python"+":"+omd_root+"/pythonpath/lib/python"
+    cmd = omd_root+"/../bin/notificationforwarder"
+
+    # Construct forwarderoptsparams
+    forwarderoptsparams = []
+    for k, v in forwarderopts.items():
+        if isinstance(v, dict): # Handle dicts for headers
+            forwarderoptsparams.append(f"--forwarderopt {k}='{json.dumps(v)}'")
+        else:
+            forwarderoptsparams.append(f"--forwarderopt {k}='{v}'")
+    forwarderoptsparams = " ".join(forwarderoptsparams)
+
+    # Construct eventoptsparams
+    eventoptsparams = " ".join([f"--eventopt {k}='{v}'" for k, v in eventopts.items()])
+
+    subprocess.call(f"OMD_SITE=my_devel_site OMD_ROOT={omd_root} PYTHONPATH={pythonpath} {cmd} --forwarder webhook --formatter datadup {forwarderoptsparams} {eventoptsparams}", shell=True)
+
+    # Read the two payloads from the file
+    received_payloads = []
+    with open("/tmp/received_payload.json", "r") as f:
+        for line in f:
+            if line.strip(): # Avoid empty lines
+                received_payloads.append(json.loads(line))
+
+    assert len(received_payloads) == 2
+
+    # Check the first event
+    assert received_payloads[0]['source'] == "nagios"
+    assert received_payloads[0]['action'] == "EskaMatrix"
+    assert received_payloads[0]['site'] == "p100"
+    assert received_payloads[0]['split_id'] == '1'
+
+    # Check the second event
+    assert received_payloads[1]['source'] == "nagios"
+    assert received_payloads[1]['action'] == "EskaMatrix"
+    assert received_payloads[1]['site'] == "p100"
+    assert received_payloads[1]['split_id'] == '2'
