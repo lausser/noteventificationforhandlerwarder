@@ -60,6 +60,9 @@ class WebhookForwarder(NotificationForwarder):
                     request_params["headers"] = json.loads(self.headers)
                 else:
                     request_params["headers"] = self.headers
+            if "url" in event.forwarderopts:
+                logger.debug(f"formatter overwrites the url with {event.forwarderopts['url']}")
+                self.url = event.forwarderopts["url"]
             if "headers" in event.forwarderopts:
                 if isinstance(event.forwarderopts["headers"], str):
                     event.forwarderopts["headers"] = json.loads(event.forwarderopts["headers"])
