@@ -22,7 +22,7 @@ from coshsh.util import setup_logging
 
 logger = None
 
-def new(target_name, tag, decider, verbose, debug, runneropts):
+def new(target_name, tag, decider, verbose, debug, runneropts, logger_type='text'):
 
     runner_name = target_name + ("_"+tag if tag else "")
     if verbose:
@@ -44,8 +44,26 @@ def new(target_name, tag, decider, verbose, debug, runneropts):
     else:
         backup_count = 3
 
+    # Setup Python logging infrastructure (same for all logger types)
     setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s", backup_count=backup_count)
-    logger = logging.getLogger(logger_name)
+    python_logger = logging.getLogger(logger_name)
+
+    # Instantiate application logger (text or json)
+    try:
+        if '.' in logger_type:
+            module_name, class_name = logger_type.rsplit('.', 1)
+        else:
+            module_name = logger_type
+            class_name = "".join([x.title() for x in logger_type.split("_")])+"Logger"
+        logger_module = import_module('eventhandler.'+module_name+'.logger',
+                                      package='eventhandler.'+module_name)
+        logger_class = getattr(logger_module, class_name)
+        logger = logger_class(logger_name, python_logger)
+    except Exception as e:
+        # Fallback to text logger
+        from eventhandler.text.logger import TextLogger
+        logger = TextLogger(logger_name, python_logger)
+        logger.warning("Could not load logger type, falling back to text", {'exception': e})
     try:
         if '.' in target_name:
             module_name, class_name = target_name.rsplit('.', 1)
@@ -63,10 +81,10 @@ def new(target_name, tag, decider, verbose, debug, runneropts):
         instance.runner_name = runner_name
         instance.decider_name = decider
 
-        # so we can use logger.info(...) in the single modules
-        runner_module.logger = logging.getLogger(logger_name)
+        # Make app_logger available to modules
+        runner_module.logger = logger
         base_module = import_module('.baseclass', package='eventhandler')
-        base_module.logger = logging.getLogger(logger_name)
+        base_module.logger = logger
 
     except Exception as e:
         raise ImportError('{} is not part of our runner collection!'.format(target_name))
@@ -342,4 +360,71 @@ class DecidedEvent(metaclass=ABCMeta):
     def discard(self, silently=True):
         self._discarded = True
         self._discarded_silently = True if silently else False
+
+
+class EventhandlerLogger(metaclass=ABCMeta):
+    """
+    Abstract base class for loggers
+
+    Loggers receive structured context and format log entries appropriately.
+    This allows switching between text and JSON formats without changing
+    logging call sites.
+    """
+
+    def __init__(self, logger_name, python_logger):
+        """
+        Initialize logger
+
+        Args:
+            logger_name: Name of the logger (e.g., "eventhandler_bash")
+            python_logger: Underlying Python logging.Logger instance
+        """
+        self.logger_name = logger_name
+        self.python_logger = python_logger
+        self.omd_site = os.environ.get("OMD_SITE", "")
+        self.originating_host = socket.gethostname()
+        self.originating_fqdn = socket.getfqdn()
+
+    @abstractmethod
+    def log(self, level, message, context=None):
+        """
+        Log a message with structured context
+
+        Args:
+            level: Log level ('debug', 'info', 'warning', 'error', 'critical')
+            message: Human-readable message
+            context: Dict with structured context:
+                - event: Raw event dict (eventopts)
+                - decided_event: DecidedEvent instance
+                - exception: Exception object
+                - exc_info: sys.exc_info() tuple for traceback
+                - runner_name: Name of runner
+                - decider_name: Name of decider
+                - decider_instance: Decider instance
+                - stdout: Command stdout
+                - stderr: Command stderr
+                - exit_code: Command exit code
+                - command: Shell command executed
+        """
+        pass
+
+    def debug(self, message, context=None):
+        """Convenience method for debug level"""
+        self.log('debug', message, context)
+
+    def info(self, message, context=None):
+        """Convenience method for info level"""
+        self.log('info', message, context)
+
+    def warning(self, message, context=None):
+        """Convenience method for warning level"""
+        self.log('warning', message, context)
+
+    def error(self, message, context=None):
+        """Convenience method for error level"""
+        self.log('error', message, context)
+
+    def critical(self, message, context=None):
+        """Convenience method for critical level"""
+        self.log('critical', message, context)
 
