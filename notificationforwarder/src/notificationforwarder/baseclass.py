@@ -25,7 +25,7 @@ from coshsh.util import setup_logging
 
 logger = None
 
-def new(target_name, tag, formatter_name, verbose, debug, forwarder_opts, reporter_name=None, reporter_opts={}):
+def new(target_name, tag, formatter_name, verbose, debug, forwarder_opts, reporter_name=None, reporter_opts={}, logger_type='text'):
 
     forwarder_name = target_name + ("_"+tag if tag else "")
     if verbose:
@@ -55,8 +55,27 @@ def new(target_name, tag, formatter_name, verbose, debug, forwarder_opts, report
         max_spool_minutes = 5
 
 
+    # Setup Python logging infrastructure (same for all logger types)
+    # Use simple format, actual formatting is done by logger class
     setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s", backup_count=backup_count)
-    logger = logging.getLogger(logger_name)
+    python_logger = logging.getLogger(logger_name)
+
+    # Instantiate application logger (text or json)
+    try:
+        if '.' in logger_type:
+            module_name, class_name = logger_type.rsplit('.', 1)
+        else:
+            module_name = logger_type
+            class_name = "".join([x.title() for x in logger_type.split("_")])+"Logger"
+        logger_module = import_module('notificationforwarder.'+module_name+'.logger',
+                                      package='notificationforwarder.'+module_name)
+        logger_class = getattr(logger_module, class_name)
+        logger = logger_class(logger_name, python_logger)
+    except Exception as e:
+        # Fallback to text logger
+        from notificationforwarder.text.logger import TextLogger
+        logger = TextLogger(logger_name, python_logger)
+        logger.warning("Could not load logger type, falling back to text", {'exception': e})
     try:
         if '.' in target_name:
             module_name, class_name = target_name.rsplit('.', 1)
@@ -79,10 +98,10 @@ def new(target_name, tag, formatter_name, verbose, debug, forwarder_opts, report
         instance.init_paths()
         instance.init_db()
 
-        # so we can use logger.info(...) in the single modules
-        forwarder_module.logger = logging.getLogger(logger_name)
+        # Make app_logger available to modules
+        forwarder_module.logger = logger
         base_module = import_module('.baseclass', package='notificationforwarder')
-        base_module.logger = logging.getLogger(logger_name)
+        base_module.logger = logger
 
     except Exception as e:
         raise ImportError('{} is not part of our forwarder collection!'.format(target_name))
@@ -175,7 +194,7 @@ class NotificationForwarder(object):
             self.dbcurs.execute(sql_create)
             self.dbconn.commit()
         except Exception as e:
-            logger.info("error initializing database {}: {}".format(self.db_file, str(e)))
+            logger.info("error initializing database", {'db_file': self.db_file, 'exception': e})
 
     def new_formatter(self):
         try:
@@ -188,10 +207,10 @@ class NotificationForwarder(object):
             instance.__module_file__ = formatter_module.__file__
             return instance
         except ImportError:
-            logger.critical("found no formatter module {}".format(module_name))
+            logger.critical("found no formatter module", {'module_name': module_name})
             return None
         except Exception as e:
-            logger.critical("unknown error error in formatter instantiation: {}".format(e))
+            logger.critical("unknown error in formatter instantiation", {'exception': e})
             return None
 
     def new_reporter(self, opts):
@@ -205,10 +224,10 @@ class NotificationForwarder(object):
             instance.__module_file__ = reporter_module.__file__
             return instance
         except ImportError:
-            logger.critical("found no reporter module {}".format(module_name))
+            logger.critical("found no reporter module", {'module_name': module_name})
             return None
         except Exception as e:
-            logger.critical("unknown error error in reporter instantiation: {}".format(e))
+            logger.critical("unknown error in reporter instantiation", {'exception': e})
             return None
 
     def format_event(self, raw_event):
@@ -224,7 +243,12 @@ class NotificationForwarder(object):
             instance.format_event(formatted_event)
             return formatted_event
         except Exception as e:
-            logger.critical("when formatting this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+            logger.critical("when formatting event there was an error", {
+                'event_data': str(raw_event),
+                'formatter_instance': instance,
+                'exception': e,
+                'exc_info': sys.exc_info()
+            })
             return None
 
     def report_event(self, formatted_event):
@@ -233,9 +257,17 @@ class NotificationForwarder(object):
             instance.report_event(formatted_event)
         except Exception as e:
             if instance:
-                logger.critical("when reporting this {} with this {} there was an error <{}>".format(str(formatted_event.eventopts), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
+                logger.critical("when reporting event there was an error", {
+                    'event_data': str(formatted_event.eventopts),
+                    'reporter_instance': instance,
+                    'exception': e,
+                    'exc_info': sys.exc_info()
+                })
             else:
-                logger.critical("could not create a {} reporter instance with {}".format(self.reporter_name, self.reporter_opts))
+                logger.critical("could not create reporter instance", {
+                    'reporter_name': self.reporter_name,
+                    'reporter_opts': self.reporter_opts
+                })
             return None
 
     def forward(self, raw_event):
@@ -246,16 +278,22 @@ class NotificationForwarder(object):
                 if not formatted_event.is_discarded_silently:
                     if not formatted_event.summary:
                         formatted_event.summary = str(raw_event)
-                    logger.info("discarded {}".format(formatted_event.summary))
+                    logger.info("discarded", {'formatted_event': formatted_event})
                 formatted_event = None
             elif formatted_event and not formatted_event.is_complete():
-                logger.critical("a formatted event {} must have the attributes payload and summary".format(formatted_event.__class__.__name__))
+                logger.critical("formatted event incomplete", {
+                    'event_class': formatted_event.__class__.__name__
+                })
                 formatted_event = None
         except Exception as e:
             try:
                 formatted_event
             except NameError:
-                logger.critical("raw event {} caused error {}".format(str(raw_event), str(e)))
+                logger.critical("raw event caused error", {
+                    'raw_event': str(raw_event),
+                    'exception': e,
+                    'exc_info': sys.exc_info()
+                })
             formatted_event = None
 
         if formatted_event:
@@ -288,11 +326,17 @@ class NotificationForwarder(object):
         try:
             raw_event_list = instance.split_events(raw_event)
             instance = None
-            logger.debug(f"received a payload with {len(raw_event_list)} single events")
+            logger.debug("received payload with multiple events", {
+                'split_count': len(raw_event_list)
+            })
             for raw_event in raw_event_list:
                 self.forward(raw_event)
         except Exception as e:
-            logger.critical(f"error split_events failed for {raw_event}")
+            logger.critical("split_events failed", {
+                'raw_event': raw_event,
+                'split_error': True,
+                'exception': e
+            })
 
     def enrich_raw_event(self, raw_event):
         if not "omd_site" in raw_event:
@@ -326,7 +370,10 @@ class NotificationForwarder(object):
             if self.num_spooled_events() and (not hasattr(self, "probe") or self.probe()):
                 self.flush()
         except Exception as e:
-            logger.critical("flush probe failed with exception <{}>".format(str(e)))
+            logger.critical("flush probe failed", {
+                'exception': e,
+                'exc_info': sys.exc_info()
+            })
 
         format_exception_msg = None
         try:
@@ -353,13 +400,24 @@ class NotificationForwarder(object):
 
         if success:
             if self.baseclass_logs_summary:
-                logger.info("forwarded {}".format(formatted_event.summary))
+                logger.info("forwarded", {
+                    'formatted_event': formatted_event,
+                    'status': 'success'
+                })
             return success
         else:
             if format_exception_msg:
-                logger.critical("forward failed with exception <{}>, spooled <{}>".format(format_exception_msg, formatted_event.summary))
+                logger.critical("forward failed", {
+                    'exception': format_exception_msg,
+                    'formatted_event': formatted_event,
+                    'spooled': True
+                })
             elif self.baseclass_logs_summary:
-                logger.warning("forward failed, spooling {}".format(formatted_event.summary))
+                logger.warning("forward failed", {
+                    'formatted_event': formatted_event,
+                    'spooled': True,
+                    'status': 'failed'
+                })
             return False
 
 
@@ -370,7 +428,10 @@ class NotificationForwarder(object):
             self.dbcurs.execute(sql_count)
             spooled_events = self.dbcurs.fetchone()[0]
         except Exception as e:
-            logger.critical("database error "+str(e))
+            logger.critical("database error", {
+                'database_error': True,
+                'exception': e
+            })
         return spooled_events
 
 
@@ -381,19 +442,27 @@ class NotificationForwarder(object):
             self.dbcurs.execute(sql_insert, (text,))
             self.dbconn.commit()
             spooled_events = self.num_spooled_events()
-            logger.warning("spooling queue length is {}".format(spooled_events))
+            logger.warning("spooling queue length", {
+                'queue_length': spooled_events
+            })
         except Exception as e:
-            logger.critical("database error "+str(e))
-            logger.info(raw_event)
+            logger.critical("database error", {
+                'database_error': True,
+                'exception': e
+            })
+            logger.info("raw event details", {'raw_event': raw_event})
 
     def acquire_lock_with_retry(self, lock_file, max_attempts=3, base_delay=0.1):
         for attempt in range(max_attempts):
             try:
                 fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                logger.debug("flush lock set")
+                logger.debug("flush lock set", {})
                 return True
             except IOError as e:
-                logger.debug(f"flush lock failed (attempt {attempt + 1}): {str(e)}")
+                logger.debug("flush lock failed", {
+                    'attempt': attempt + 1,
+                    'exception': e
+                })
                 if attempt < max_attempts - 1:
                     delay = base_delay * (2 ** attempt) + random.uniform(0, 0.1)
                     time.sleep(delay)
@@ -412,18 +481,27 @@ class NotificationForwarder(object):
                     self.dbcurs.execute(sql_delete, (outdated,))
                     dropped = self.dbcurs.rowcount
                     if dropped:
-                        logger.info("dropped {} outdated events".format(dropped))
+                        logger.info("dropped outdated events", {
+                            'spooled_count': dropped,
+                            'action': 'dropped'
+                        })
                     last_events_to_flush = 0
                     while True:
                         events_to_flush = self.num_spooled_events()
                         if events_to_flush:
-                            logger.info("there are {} spooled events to be re-sent".format(events_to_flush))
+                            logger.info("spooled events to be re-sent", {
+                                'spooled_count': events_to_flush,
+                                'action': 'resend'
+                            })
                         else:
-                            logger.debug("nothing left to flush")
+                            logger.debug("nothing left to flush", {})
                             break
                         if last_events_to_flush == events_to_flush:
                             if events_to_flush != 0:
-                                logger.critical("{} spooled events could not be submitted".format(last_events_to_flush))
+                                logger.critical("spooled events could not be submitted", {
+                                    'spooled_count': last_events_to_flush,
+                                    'action': 'could_not_submit'
+                                })
                             break
                         else:
                             self.dbcurs.execute(sql_select)
@@ -436,22 +514,40 @@ class NotificationForwarder(object):
                                     success = self.submit(formatted_event)
                                     if success:
                                         self.dbcurs.execute(sql_delete_id, (id, ))
-                                        logger.info("delete spooled event {}".format(id))
+                                        logger.info("delete spooled event", {
+                                            'spooled_count': 1,
+                                            'event_id': id,
+                                            'action': 'delete'
+                                        })
                                         self.dbconn.commit()
                                     else:
-                                        logger.critical("event {} stays in spool".format(id))
+                                        logger.critical("event stays in spool", {
+                                            'event_id': id,
+                                            'action': 'stays_in_spool'
+                                        })
                                 else:
-                                    logger.critical("could not format spooled {}. sorry, but i will delete this garbage with id {}".format(raw_event, id))
+                                    logger.critical("could not format spooled event", {
+                                        'raw_event': raw_event,
+                                        'event_id': id,
+                                        'spooled_count': 1,
+                                        'action': 'could_not_format'
+                                    })
                                     self.dbcurs.execute(sql_delete_id, (id, ))
-                                    logger.info("delete trash event {}".format(id))
+                                    logger.info("delete trash event", {
+                                        'event_id': id,
+                                        'action': 'delete_trash'
+                                    })
                                     self.dbconn.commit()
                             last_events_to_flush = events_to_flush
                     self.dbconn.commit()
                 except Exception as e:
-                    logger.critical(f"database flush+resubmit failed: {e}")
+                    logger.critical("database flush+resubmit failed", {
+                        'database_error': True,
+                        'exception': e
+                    })
                 fcntl.lockf(lock_file, fcntl.LOCK_UN)
             else:
-                logger.debug("missed the flush lock")
+                logger.debug("missed the flush lock", {})
 
     def no_more_logging(self):
         # this is called in the forwarder. If the forwarder already wrote
@@ -555,5 +651,76 @@ class NotificationReporter(metaclass=ABCMeta):
     @abstractmethod
     def report_event(self, formatted_event):
         pass
+
+
+class NotificationLogger(metaclass=ABCMeta):
+    """
+    Abstract base class for loggers
+
+    Loggers receive structured context and format log entries appropriately.
+    This allows switching between text and JSON formats without changing
+    logging call sites.
+    """
+
+    def __init__(self, logger_name, python_logger):
+        """
+        Initialize logger
+
+        Args:
+            logger_name: Name of the logger (e.g., "notificationforwarder_webhook")
+            python_logger: Underlying Python logging.Logger instance
+        """
+        self.logger_name = logger_name
+        self.python_logger = python_logger
+        self.omd_site = os.environ.get("OMD_SITE", "")
+        self.originating_host = socket.gethostname()
+        self.originating_fqdn = socket.getfqdn()
+
+    @abstractmethod
+    def log(self, level, message, context=None):
+        """
+        Log a message with structured context
+
+        Args:
+            level: Log level ('debug', 'info', 'warning', 'error', 'critical')
+            message: Human-readable message
+            context: Dict with structured context:
+                - event: Raw event dict (eventopts)
+                - formatted_event: FormattedEvent instance
+                - exception: Exception object
+                - exc_info: sys.exc_info() tuple for traceback
+                - spooled: Boolean if event was spooled
+                - forwarder_name: Name of forwarder
+                - formatter_name: Name of formatter
+                - reporter_name: Name of reporter
+                - formatter_instance: Formatter instance
+                - reporter_instance: Reporter instance
+                - spooled_count: Number of spooled events
+                - queue_length: Queue length
+                - dropped_count: Number of dropped events
+                - event_data: Raw event data
+                - status: Status string
+        """
+        pass
+
+    def debug(self, message, context=None):
+        """Convenience method for debug level"""
+        self.log('debug', message, context)
+
+    def info(self, message, context=None):
+        """Convenience method for info level"""
+        self.log('info', message, context)
+
+    def warning(self, message, context=None):
+        """Convenience method for warning level"""
+        self.log('warning', message, context)
+
+    def error(self, message, context=None):
+        """Convenience method for error level"""
+        self.log('error', message, context)
+
+    def critical(self, message, context=None):
+        """Convenience method for critical level"""
+        self.log('critical', message, context)
 
 

@@ -73,6 +73,10 @@ Example for an HTTP-based reporter:
                       dest="debug",
                       help='Increase the log level to DEBUG',
                       default=False)
+    parser.add_argument('--logger', action='store',
+                      dest="logger",
+                      help='Logger type: text (default) or json, or custom logger module',
+                      default='text')
     parser.add_argument('--version', action='version',
                       version=f'%(prog)s VERSION')
 
@@ -81,7 +85,7 @@ Example for an HTTP-based reporter:
         args.formatter = args.forwarder
 
     try:
-        forwarder = baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt, args.reporter, args.reporteropt)
+        forwarder = baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt, args.reporter, args.reporteropt, args.logger)
     except Exception as a:
         logger_name = "notificationforwarder_"+args.forwarder+("_"+args.forwardertag if args.forwardertag else "")
         logger = logging.getLogger(logger_name)

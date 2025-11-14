@@ -240,9 +240,98 @@ There is also a SyslogFormatter, which creates the log line as:
 
 If you want a different format, then copy *lib/python/notificationforwarder/syslog/formatter.py* to *local/lib/python/notificationforwarder/syslog/formatter.py* and modify it like you want. Or, with *--formatter*, you can use whatever formatter is suitable, as long as it's payload attribute consists of a line of text.
 
+## Loggers
+
+The framework uses a modular logging architecture similar to formatters, forwarders, and reporters. By default, notificationforwarder uses **text format logging** - you don't need to do anything, logging works exactly as it did before. The traditional text format is backward compatible with all existing installations.
+
+### Why JSON Logging?
+
+In enterprise environments, the gateway from monitoring systems to incident management platforms like Remedy, ServiceNow, or other ITSM tools is crucial for operational reliability. For comprehensive monitoring and troubleshooting of this critical path, logs need to be ingested into log aggregation systems like Splunk for analysis, alerting, and correlation.
+
+The JSON logger provides structured logging optimized for ingestion into Splunk and other log management systems. It outputs single-line JSON with:
+- Splunk-friendly underscore field naming (e.g., `event_host_name`, `event_service_name`)
+- Complete event details including state, output, and summary
+- Operational metrics (queue length, spool counts, retry attempts)
+- Structured exception traces
+- Timezone-aware timestamps
+
+### Usage
+
+**Default (text logging):**
+```bash
+$USER1$/notificationforwarder \
+    --forwarder webhook \
+    --forwarderopt url=https://api.example.com/tickets \
+    --eventopt HOSTNAME='$HOSTNAME$' \
+    --eventopt SERVICESTATE='$SERVICESTATE$'
+```
+
+**JSON logging for Splunk ingestion:**
+```bash
+$USER1$/notificationforwarder \
+    --forwarder webhook \
+    --forwarderopt url=https://api.example.com/tickets \
+    --logger json \
+    --eventopt HOSTNAME='$HOSTNAME$' \
+    --eventopt SERVICESTATE='$SERVICESTATE$'
+```
+
+**Custom logger:**
+```bash
+$USER1$/notificationforwarder \
+    --forwarder webhook \
+    --logger mycustomlogger \
+    --eventopt HOSTNAME='$HOSTNAME$'
+```
+
+### Example Log Output
+
+**Text format (default):**
+```
+2025-11-13 17:00:57,987 3468977 - INFO - forwarded dbserver02.example.com/MySQL: WARNING - Slow queries
+```
+
+**JSON format:**
+```json
+{
+  "timestamp": "2025-11-13T17:00:57.987487+01:00",
+  "host_name": "oasch.example.com",
+  "version": "2.9",
+  "level": "INFO",
+  "logger": "notificationforwarder_webhook",
+  "omd_site": "demo_site",
+  "event_host_name": "dbserver02.example.com",
+  "event_service_name": "MySQL",
+  "event_state": "WARNING",
+  "event_notification_type": "PROBLEM",
+  "event_service_output": "MySQL WARNING - Slow queries detected",
+  "event_summary": "dbserver02.example.com/MySQL: WARNING - Slow queries",
+  "msg": {
+    "message": "forwarded",
+    "status": "success"
+  }
+}
+```
+
+### Custom Loggers
+
+You can create custom loggers by:
+1. Creating `~/local/lib/python/notificationforwarder/mylogger/logger.py`
+2. Inheriting from `NotificationLogger` base class
+3. Implementing the `log(level, message, context)` method
+
+```python
+from notificationforwarder.baseclass import NotificationLogger
+
+class MyloggerLogger(NotificationLogger):
+    def log(self, level, message, context=None):
+        # Custom logging implementation
+        pass
+```
+
 ## Reporters
 
-Like *forwarder* and *formatter*, a *reporter* is an instance of a *NotificationReporter* class defined in a file named *reporter.py*. There is one class coming with notificationforwarder, the *NaemonlogReporter*. It's purpose it to write a message to the Naemon logfile. When notificationforwarder is run as a standalone script (and not triggered as a notificationhandler by Naemon), the *NaemonlogReporter* can nevertheless leave a line in the Naemon log.  
+Like *forwarder* and *formatter*, a *reporter* is an instance of a *NotificationReporter* class defined in a file named *reporter.py*. There is one class coming with notificationforwarder, the *NaemonlogReporter*. It's purpose it to write a message to the Naemon logfile. When notificationforwarder is run as a standalone script (and not triggered as a notificationhandler by Naemon), the *NaemonlogReporter* can nevertheless leave a line in the Naemon log.
 Or you can write an extra log showing success or failure of the notification delivery.
 
 ```
