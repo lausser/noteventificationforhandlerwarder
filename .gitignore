@@ -4,3 +4,5 @@ dist
 sdist
 *.egg
 examples/
+.opencode/
+notificationforwarder/tests/var/
