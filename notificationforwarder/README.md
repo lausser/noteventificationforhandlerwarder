@@ -329,6 +329,62 @@ class MyloggerLogger(NotificationLogger):
         pass
 ```
 
+## Runtime Architecture
+
+The runtime keeps the historical CLI and plugin model, but the core flow is now split into clearer responsibilities instead of concentrating everything in one large class.
+
+- `baseclass.new(...)`: compatibility entrypoint that creates a configured forwarder instance.
+- `runtime_config.py`: normalizes runtime options, default values, log naming, and spool-related paths.
+- `component_loader.py`: resolves and loads forwarders, formatters, reporters, and loggers using the established naming rules.
+- `runtime_flow.py`: enriches raw events and applies the common forwarding/reporting result flow.
+- `spool.py`: owns sqlite spool persistence, replay batches, and flush-lock retry behavior.
+
+### Forwarding Flow
+
+The runtime flow is:
+
+1. Normalize runtime configuration and initialize logging.
+2. Load the forwarder implementation.
+3. Enrich the raw event with OMD/site metadata.
+4. Load the formatter and build a `FormattedEvent`.
+5. Attempt delivery.
+6. If delivery fails, spool the raw event for retry unless it is a heartbeat.
+7. If a reporter is configured, attach forwarding context and call the reporter.
+
+### Extension Contracts
+
+Custom extensions still follow the existing filesystem and naming conventions:
+
+- Forwarder: `notificationforwarder/<name>/forwarder.py` with class `<Name>Forwarder`
+- Formatter: `notificationforwarder/<name>/formatter.py` with class `<Name>Formatter`
+- Reporter: `notificationforwarder/<name>/reporter.py` with class `<Name>Reporter`
+- Logger: `notificationforwarder/<name>/logger.py` with class `<Name>Logger`
+
+If you pass a dotted class path instead of a simple name, the runtime uses it as an explicit module/class reference. Otherwise it derives the class name by capitalizing the plugin name and appending the expected suffix.
+
+### Runtime Guarantees
+
+- Text logging remains the default and fallback logger.
+- Unknown logger implementations fall back to the text logger and emit a warning.
+- Failed deliveries are spooled in sqlite when possible.
+- Spooled events are retried on later executions before the new event is sent, as long as they have not expired.
+- Expired spool entries are dropped during flush and logged as outdated events.
+- Concurrent flush attempts for the same forwarder are suppressed with a lock file.
+
+## Contributor Verification
+
+When changing runtime code, run the relevant tests at minimum:
+
+```bash
+pytest tests/test_runtime_foundation.py tests/test_delivery_resilience.py tests/test_classes.py
+```
+
+For broader confidence, run the full suite:
+
+```bash
+pytest
+```
+
 ## Reporters
 
 Like *forwarder* and *formatter*, a *reporter* is an instance of a *NotificationReporter* class defined in a file named *reporter.py*. There is one class coming with notificationforwarder, the *NaemonlogReporter*. It's purpose it to write a message to the Naemon logfile. When notificationforwarder is run as a standalone script (and not triggered as a notificationhandler by Naemon), the *NaemonlogReporter* can nevertheless leave a line in the Naemon log.
@@ -355,5 +411,4 @@ define command{
                     >> $USER4$/var/log/notificationforwarder_errors.log 2>&1
 }
 ```
-
 

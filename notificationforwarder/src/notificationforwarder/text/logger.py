@@ -139,9 +139,32 @@ class TextLogger(NotificationLogger):
         if message == "missed the flush lock":
             return "missed the flush lock"
 
+        if message == "concurrent flush suppressed":
+            return "concurrent flush suppressed"
+
+        if message == "spool replay summary":
+            return (
+                "spool replay summary: attempted={attempted}, recovered={recovered}, "
+                "stayed_in_spool={stayed}, deleted_trash={trash}, dropped={dropped}"
+            ).format(
+                attempted=context.get('attempted', 0),
+                recovered=context.get('recovered_count', 0),
+                stayed=context.get('stays_in_spool_count', 0),
+                trash=context.get('deleted_trash_count', 0),
+                dropped=context.get('dropped_count', 0),
+            )
+
         # Handle db init error
         if message == "error initializing database":
             return f"error initializing database {context.get('db_file', '')}: {context.get('exception', '')}"
+
+        if message == "delivery failed and event could not be persisted":
+            event = context.get('formatted_event')
+            summary = getattr(event, 'summary', None)
+            suffix = f" <{summary}>" if summary else ""
+            if context.get('exception'):
+                return f"delivery failed and event could not be persisted{suffix} with exception <{context.get('exception')}>"
+            return f"delivery failed and event could not be persisted{suffix}"
 
         # Handle formatter/forwarder not found
         if message == "found no formatter module":
