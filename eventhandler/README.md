@@ -26,6 +26,8 @@ define command{
 The Decider component evaluates whether an event should be handled based on the specified conditions. It considers factors such as current state, state type, attempt count, downtime, etc., and returns a set of parameters indicating the action to be taken.
 The binary **lib/monitoring-plugins/eventhandler** takes multiple *\-\-eventopt KEY=VALUE*, which are usually Naemon macros. These key-value pairs are found in the dict *event.eventopts*.
 
+Runtime behavior is split into clear checkpoints: event enrichment, decider loading, decision preparation, runner execution, optional forwarding, and logging. When something fails, the runtime now reports which component failed and which resolution rule it attempted.
+
 Here is an example for a decider which is used in a self-monitoring setup. Its job is to restart an OMD instance or at least stopped/failed processes.
 
 ```python
@@ -69,7 +71,7 @@ class SshRunner(EventhandlerRunner):
         setattr(self, "username", getattr(self, "username", None))
         setattr(self, "hostname", getattr(self, "hostname", "localhost"))
         setattr(self, "port", getattr(self, "port", None))
-        setattr(self, "identity_file", getattr(self, "identity_file", None))
+        setattr(self, "identity_file", resolve_identity_file(getattr(self, "identity_file", None)))
         setattr(self, "command", getattr(self, "command", "exit 0"))
 
     def run(self, event):
@@ -87,6 +89,13 @@ class SshRunner(EventhandlerRunner):
 
 The previous example with runner *ssh* and decider *omd_site_self_heal* can be used out of the box in an OMD environment. (There are *~/lib/python/eventhandler/ssh/runner.py* and *~/lib/python/eventhandler/omd_site_self_heal/decider.py*)
 For your own deciders and runners, create a folder in *~/local/lib/python/eventhandler* and put a decider.py or runner.py in it.
+
+Extension rules:
+* module names follow the package path under `eventhandler.<name>.<kind>`
+* class names default to title-cased module names plus `Decider`, `Runner`, or `Logger`
+* deciders and runners mutate `event.payload` / `event.summary` in place
+* runner return values stay compatible: command string, `True`/`False`, or `None` for intentional abort
+* logger loading falls back to text logging when the requested logger cannot be imported
 
 
 Builtin runners you can just use without writing code yourself are:
@@ -115,6 +124,8 @@ There is a decider *default*, which triggers the runner on SOFT;1. This and the 
 ### Loggers
 
 The framework uses a modular logging architecture similar to runners, deciders, and formatters. By default, eventhandler uses **text format logging** - you don't need to do anything, logging works exactly as it did before. The traditional text format is backward compatible with all existing installations.
+
+If a requested logger cannot be resolved, the runtime falls back to text logging and records the fallback in the log file.
 
 #### Why JSON Logging?
 

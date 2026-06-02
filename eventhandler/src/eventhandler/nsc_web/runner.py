@@ -1,4 +1,6 @@
 import os
+import os
+
 from eventhandler.baseclass import EventhandlerRunner
 
 class NscWebRunner(EventhandlerRunner):
@@ -12,7 +14,7 @@ class NscWebRunner(EventhandlerRunner):
         setattr(self, "arguments", getattr(self, "arguments", None))
 
     def run(self, event):
-        cmd = "{}/lib/nagios/plugins/check_nsc_web -k -u https://{}:{} -p '{}' -t 180".format(os.environ["OMD_ROOT"], self.hostname, self.port, self.password)
+        cmd = "{}/lib/nagios/plugins/check_nsc_web -k -u https://{}:{} -p '{}' -t 180".format(getattr(self, "runtime_root", os.environ["OMD_ROOT"]), self.hostname, self.port, self.password)
         if self.arguments:
             cmd += " {} '{}'".format(self.command, self.arguments)
         else:

@@ -224,6 +224,24 @@ class TestEventhandlerLoggerIntegration(unittest.TestCase):
             # It's okay if example runner doesn't exist in test environment
             self.assertIn("example", str(e).lower())
 
+    def test_logger_fallback_for_invalid_type(self):
+        from eventhandler import baseclass
+
+        runner = baseclass.new(
+            target_name='example',
+            tag=None,
+            decider='example',
+            verbose=False,
+            debug=False,
+            runneropts={},
+            logger_type='missing_logger'
+        )
+        self.assertIsNotNone(runner)
+        log_file = next(h.baseFilename for h in logging.getLogger('eventhandler_example').handlers if hasattr(h, 'baseFilename'))
+        with open(log_file) as fh:
+            contents = fh.read()
+        self.assertIn('falling back to text', contents)
+
 
 if __name__ == '__main__':
     unittest.main()

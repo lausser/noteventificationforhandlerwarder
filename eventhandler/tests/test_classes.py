@@ -143,6 +143,33 @@ def test_example_runner_run_discard_silent(setup):
     assert "discarded: halo i bims 1 alarm vong naemon her und i schmeis" not in log
     assert not os.path.exists("/tmp/echo") # discard -> no runner
 
+
+def test_example_runner_explicit_outcomes(setup):
+    example = eventhandler.baseclass.new("example", None, "example", True, True, {})
+    assert example.run_result(None, True)[0] is True
+    assert example.run_result(None, False)[0] is False
+    assert example.run_result(None, None)[0] is None
+
+
+def test_example_forwarder_failure_isolated(setup):
+    class BrokenForwarder:
+        def forward(self, event):
+            raise RuntimeError("downstream failed")
+
+    example = eventhandler.baseclass.new("example", None, "example", True, True, {"path": "/tmp"})
+    example.forwarder = BrokenForwarder()
+    result = example.handle({"summary": "safe", "content": "payload"})
+    assert result is True
+
+
+def test_handle_suppresses_concurrent_attempt(setup):
+    example = eventhandler.baseclass.new("example", None, "example", True, True, {"path": "/tmp"})
+    assert example._handle_lock.acquire(blocking=False)
+    try:
+        assert example.handle({"summary": "safe", "content": "payload"}) is None
+    finally:
+        example._handle_lock.release()
+
 def test_example_runner_timeout(setup):
     eventopts = {
         "summary": "i bim dem sammari", # decider sets own summary
@@ -153,4 +180,3 @@ def test_example_runner_timeout(setup):
     example = eventhandler.baseclass.new("example", None, "example", True, True,  eventopts)
     example.handle(eventopts)
     assert not os.path.exists("/tmp/echo") # discard -> no runner
-

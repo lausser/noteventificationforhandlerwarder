@@ -9,6 +9,7 @@ import errno
 import fcntl
 import time
 import subprocess
+import threading
 try:
     import simplejson as json
 except ImportError:
@@ -21,6 +22,54 @@ from coshsh.util import setup_logging
 
 
 logger = None
+
+
+def runtime_root():
+    return os.environ.get("OMD_ROOT", os.getcwd())
+
+
+def runtime_path(*parts):
+    return os.path.join(runtime_root(), *parts)
+
+
+def runtime_log_dir():
+    return runtime_path("var", "log")
+
+
+def runtime_tmp_dir():
+    return runtime_path("tmp")
+
+
+def runtime_var_tmp_dir():
+    return runtime_path("var", "tmp")
+
+
+def resolve_identity_file(path):
+    if not path:
+        return None
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def resolve_component_name(name, suffix):
+    if '.' in name:
+        module_name, class_name = name.rsplit('.', 1)
+    else:
+        module_name = name
+        class_name = "".join([x.title() for x in name.split("_")]) + suffix
+    return module_name, class_name
+
+
+def load_component(package, name, suffix, kind):
+    module_name, class_name = resolve_component_name(name, suffix)
+    module_path = package + '.' + module_name + '.logger' if kind == 'logger' else package + '.' + module_name + '.runner'
+    try:
+        module = import_module(module_path, package=package + '.' + module_name)
+        component = getattr(module, class_name)
+        return module, component, module_name, class_name
+    except ImportError as e:
+        raise ImportError("could not load {} module '{}' using {}.{} from {}: {}".format(kind, name, module_path, class_name, package, e))
+    except AttributeError as e:
+        raise ImportError("could not find {} class '{}' in '{}' resolved from '{}': {}".format(kind, class_name, module_path, name, e))
 
 def new(target_name, tag, decider, verbose, debug, runneropts, logger_type='text'):
 
@@ -45,33 +94,20 @@ def new(target_name, tag, decider, verbose, debug, runneropts, logger_type='text
         backup_count = 3
 
     # Setup Python logging infrastructure (same for all logger types)
-    setup_logging(logdir=os.environ["OMD_ROOT"]+"/var/log", logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s", backup_count=backup_count)
+    setup_logging(logdir=runtime_log_dir(), logfile=logger_name+".log", scrnloglevel=scrnloglevel, txtloglevel=txtloglevel, format="%(asctime)s %(process)d - %(levelname)s - %(message)s", backup_count=backup_count)
     python_logger = logging.getLogger(logger_name)
 
     # Instantiate application logger (text or json)
     try:
-        if '.' in logger_type:
-            module_name, class_name = logger_type.rsplit('.', 1)
-        else:
-            module_name = logger_type
-            class_name = "".join([x.title() for x in logger_type.split("_")])+"Logger"
-        logger_module = import_module('eventhandler.'+module_name+'.logger',
-                                      package='eventhandler.'+module_name)
-        logger_class = getattr(logger_module, class_name)
+        logger_module, logger_class, logger_module_name, logger_class_name = load_component('eventhandler', logger_type, 'Logger', 'logger')
         logger = logger_class(logger_name, python_logger)
     except Exception as e:
         # Fallback to text logger
         from eventhandler.text.logger import TextLogger
         logger = TextLogger(logger_name, python_logger)
-        logger.warning("Could not load logger type, falling back to text", {'exception': e})
+        logger.warning("could not load logger type '{}' using eventhandler.{}.logger; falling back to text".format(logger_type, logger_type), {'exception': e, 'module_name': logger_type, 'logger_type': logger_type})
     try:
-        if '.' in target_name:
-            module_name, class_name = target_name.rsplit('.', 1)
-        else:
-            module_name = target_name
-            class_name = "".join([x.title() for x in target_name.split("_")])+"Runner"
-        runner_module = import_module('eventhandler.'+module_name+'.runner', package='eventhandler.'+module_name)
-        runner_class = getattr(runner_module, class_name)
+        runner_module, runner_class, module_name, class_name = load_component('eventhandler', target_name, 'Runner', 'runner')
 
         instance = runner_class(runneropts)
         instance.__module_file__ = runner_module.__file__
@@ -80,6 +116,10 @@ def new(target_name, tag, decider, verbose, debug, runneropts, logger_type='text
             instance.tag = tag
         instance.runner_name = runner_name
         instance.decider_name = decider
+        instance.runtime_root = runtime_root()
+        instance.runtime_log_dir = runtime_log_dir()
+        instance.runtime_tmp_dir = runtime_tmp_dir()
+        instance.runtime_var_tmp_dir = runtime_var_tmp_dir()
 
         # Make app_logger available to modules
         runner_module.logger = logger
@@ -87,7 +127,7 @@ def new(target_name, tag, decider, verbose, debug, runneropts, logger_type='text
         base_module.logger = logger
 
     except Exception as e:
-        raise ImportError('{} is not part of our runner collection!'.format(target_name))
+        raise ImportError("could not load runner '{}' using eventhandler.{}.runner as {}: {}".format(target_name, module_name if 'module_name' in locals() else target_name, class_name if 'class_name' in locals() else '', e))
     else:
         if not issubclass(runner_class, EventhandlerRunner):
             raise ImportError("We currently don't have {}, but you are welcome to send in the request for it!".format(runner_class))
@@ -130,6 +170,7 @@ class EventhandlerRunner(object):
 
     def __init__(self, opts):
         self.baseclass_logs_summary = True
+        self._handle_lock = threading.Lock()
         for opt in opts:
             setattr(self, opt, opts[opt])
 
@@ -144,21 +185,27 @@ class EventhandlerRunner(object):
             instance.__module_file__ = decider_module.__file__
             return instance
         except ImportError:
-            logger.critical("found no decider module {}".format(module_name))
+            logger.critical("could not load decider '{}' using eventhandler.{}.decider and class {}".format(self.decider_name, module_name, class_name))
+            return None
+        except AttributeError as e:
+            logger.critical("could not find decider class {} for '{}' in eventhandler.{}.decider: {}".format(class_name, self.decider_name, module_name, e))
             return None
         except Exception as e:
-            logger.critical("unknown error error in decider instantiation: {}".format(e))
+            logger.critical("unexpected error instantiating decider '{}' from eventhandler.{}.decider as {}: {}".format(self.decider_name, module_name, class_name, e))
             return None
 
-
-    def decide_and_prepare_event(self, raw_event):
-        instance = self.new_decider()
-        if not "omd_site" in raw_event:
+    def enrich_event(self, raw_event):
+        if "omd_site" not in raw_event:
             raw_event["omd_site"] = os.environ.get("OMD_SITE", "get https://omd.consol.de/docs/omd")
         raw_event["omd_originating_host"] = socket.gethostname()
         raw_event["omd_originating_fqdn"] = socket.getfqdn()
         raw_event["omd_originating_timestamp"] = int(time.time())
-        raw_event["omd_originating_timestamp"] = int(time.time())
+        return raw_event
+
+    def prepare_decided_event(self, raw_event):
+        instance = self.new_decider()
+        if not instance:
+            return None
         try:
             decided_event = DecidedEvent(raw_event)
             setattr(instance, "runner", self.runner_name[:-len("_"+self.tag)] if hasattr(self, "tag") and self.runner_name.endswith("_"+self.tag) else self.runner_name)
@@ -168,22 +215,79 @@ class EventhandlerRunner(object):
             logger.critical("when deciding based on this {} with this {} there was an error <{}>".format(str(raw_event), instance.__class__.__name__+"@"+instance.__module_file__, str(e)))
             return None
 
+    def validate_decided_event(self, decided_event, raw_event):
+        if not decided_event:
+            return None
+        if decided_event.is_discarded:
+            if not decided_event.is_discarded_silently:
+                if not decided_event.summary:
+                    decided_event.summary = str(raw_event)
+                logger.info("discarded: {}".format(decided_event.summary))
+            return None
+        if not decided_event.is_complete():
+            logger.critical("a decided event {} must have the attributes payload and summary. {}".format(decided_event.__class__.__name__, decided_event.__dict__))
+            return None
+        return decided_event
+
+    def execute_decided_event(self, decided_event):
+        self.overwrite_attributes(decided_event.payload)
+        return self.run_decided(decided_event)
+
+    def run_result(self, decided_event, runner_res):
+        stdout, stderr = None, None
+        if isinstance(runner_res, str):
+            command = runner_res
+            logger.debug(f"command is {command}")
+            proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            exit_code = proc.wait()
+            return exit_code == 0, stdout, stderr, command
+        if runner_res is True:
+            return True, stdout, stderr, None
+        if runner_res is False:
+            return False, stdout, stderr, None
+        if runner_res is None:
+            self.no_more_logging()
+            return None, stdout, stderr, None
+        return False, stdout, stderr, None
+
+    def build_forward_event(self, raw_event, success, stdout, stderr):
+        forward_event = dict(raw_event)
+        forward_event["NOTIFICATIONTYPE"] = "EVENTHANDLER"
+        forward_event["NOTIFICATIONAUTHOR"] = self.runner_name
+        forward_event["NOTIFICATIONCOMMENT"] = "stdout: {}, stderr: {}".format(stdout if stdout else "-", stderr if stderr else "-")
+        if "SERVICEDESC" in forward_event:
+            forward_event["SERVICESTATE"] = "OK" if success else "CRITICAL"
+        else:
+            forward_event["HOSTSTATE"] = "UP" if success else "DOWN"
+        forward_event["eventhandler_success"] = success
+        return forward_event
+
+    def handoff_to_forwarder(self, raw_event, success, stdout, stderr):
+        if not hasattr(self, "forwarder") or success is None:
+            return
+        forward_event = self.build_forward_event(raw_event, success, stdout, stderr)
+        try:
+            self.forwarder.forward(forward_event)
+        except Exception as e:
+            logger.critical("forwarder handoff failed for {} with {}: {}".format(forward_event.get("NOTIFICATIONAUTHOR", self.runner_name), getattr(self.forwarder, "__class__", type(self.forwarder)).__name__, e))
+
+    def forward_execution_result(self, raw_event, success, stdout, stderr):
+        self.handoff_to_forwarder(raw_event, success, stdout, stderr)
+
+    def decide_and_prepare_event(self, raw_event):
+        return self.prepare_decided_event(self.enrich_event(raw_event))
+
     def handle(self, raw_event):
         success = False
-        if "SERVICEDESC" in raw_event:
-            if re.match(r'(Return\ code\ of|Timed\ Out|timed\ out|check_by_ssh:\ Remote\ command|service\ check\ orphaned)', raw_event["SERVICEDESC"]):
-                return True
+        if not self._handle_lock.acquire(blocking=False):
+            logger.warning("suppressed concurrent handle attempt for {}".format(self.runner_name))
+            return None
         try:
-            decided_event = self.decide_and_prepare_event(raw_event)
-            if decided_event.is_discarded:
-                if not decided_event.is_discarded_silently:
-                    if not decided_event.summary:
-                        decided_event.summary = str(raw_event)
-                    logger.info("discarded: {}".format(decided_event.summary))
-                decided_event = None
-            elif decided_event and not decided_event.is_complete():
-                logger.critical("a decided event {} must have the attributes payload and summary. {}".format(decided_event.__class__.__name__, decided_event.__dict__))
-                decided_event = None
+            if "SERVICEDESC" in raw_event:
+                if re.match(r'(Return\ code\ of|Timed\ Out|timed\ out|check_by_ssh:\ Remote\ command|service\ check\ orphaned)', raw_event["SERVICEDESC"]):
+                    return True
+            decided_event = self.validate_decided_event(self.decide_and_prepare_event(raw_event), raw_event)
         except Exception as e:
             try:
                 decided_event
@@ -191,28 +295,13 @@ class EventhandlerRunner(object):
                 logger.critical("raw event {} caused error {}".format(str(raw_event), str(e)))
             decided_event = None
             success = None
-        if decided_event:
-            self.overwrite_attributes(decided_event.payload)
-            success, stdout, stderr = self.run_decided(decided_event)
-            if hasattr(self, "forwarder"):
-                raw_event["NOTIFICATIONTYPE"] = "EVENTHANDLER"
-                raw_event["NOTIFICATIONAUTHOR"] = self.runner_name
-                raw_event["NOTIFICATIONCOMMENT"] = "stdout: {}, stderr: {}".format(stdout if stdout else "-", stderr if stderr else "-")
-                if "SERVICEDESC" in raw_event:
-                    if success:
-                        raw_event["SERVICESTATE"] = "OK"
-                    else:
-                        raw_event["SERVICESTATE"] = "CRITICAL"
-                else:
-                    if success:
-                        raw_event["HOSTSTATE"] = "UP"
-                    else:
-                        raw_event["HOSTSTATE"] = "DOWN"
-                raw_event["eventhandler_success"] = success
-                if success != None:
-                    # none means, python runner has aborted intentionally
-                    self.forwarder.forward(raw_event)
-        return success
+        try:
+            if decided_event:
+                success, stdout, stderr = self.execute_decided_event(decided_event)
+                self.forward_execution_result(raw_event, success, stdout, stderr)
+            return success
+        finally:
+            self._handle_lock.release()
 
     def overwrite_attributes(self, payload):
         # paload can overwrite runneropts
@@ -228,25 +317,11 @@ class EventhandlerRunner(object):
                 success = True
             else:
                 runner_res = self.run(decided_event)
-                if isinstance(runner_res, str):
-                    # The runner returns a command line
-                    command = runner_res
-                    logger.debug(f"command is {command}")
-                    proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    stdout, stderr = proc.communicate()
-                    exit_code = proc.wait()
-                    success = True if exit_code == 0 else False
-                elif runner_res in [True, False]:
-                    # The runner is pure python or executed a command itself or
-                    # did something else. It only reports success or failure to the baseclass.
-                    # No stdout, stderr. the runner has to write output itself
-                    success = runner_res
-                elif runner_res == None:
-                    # runner discard
-                    success = False
-                    self.no_more_logging()
-                else:
-                    success = False
+                success, stdout, stderr, command = self.run_result(decided_event, runner_res)
+                if command:
+                    exit_code = 0 if success else 1
+                if success is None:
+                    return None, stdout, stderr
         except Exception as e:
             success = False
             decide_exception_msg = str(e)
@@ -427,4 +502,3 @@ class EventhandlerLogger(metaclass=ABCMeta):
     def critical(self, message, context=None):
         """Convenience method for critical level"""
         self.log('critical', message, context)
-
