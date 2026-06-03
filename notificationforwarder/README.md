@@ -244,9 +244,9 @@ If you want a different format, then copy *lib/python/notificationforwarder/sysl
 
 ### Nostr
 
-The Nostr plugin pair publishes a markdown-like note with labeled lines and default monitoring tags.
+The Nostr plugin pair publishes an encrypted direct message with labeled lines and default monitoring tags so the alert appears in chat-oriented clients.
 
-Install the optional Nostr support with `pip install omdnotificationforwarder[nostr]`.
+Install the optional Nostr support with `pip install notificationforwarder[nostr]`.
 
 |parameter|description|default|
 |---------|-----------|-------|
@@ -267,6 +267,8 @@ $USER1$/notificationforwarder \
     --eventopt SERVICESTATE='$SERVICESTATE$' \
     --eventopt SERVICEOUTPUT='$SERVICEOUTPUT$'
 ```
+
+The recipient `p` tag can be provided through the `tags` forwarder option or custom formatter output. The message content is encrypted before relay publication, so it shows up as a DM in clients that support NIP-04 direct messages.
 
 ## Loggers
 

@@ -9,6 +9,8 @@ print(private_key.public_key.bech32())  # npub1...
 ```
 """
 
+import json
+
 from notificationforwarder.baseclass import NotificationFormatter
 
 
@@ -28,6 +30,11 @@ class NostrFormatter(NotificationFormatter):
             tags.append(["service", service])
         if state:
             tags.append(["state", state])
+        if isinstance(extra_tags, str):
+            try:
+                extra_tags = json.loads(extra_tags)
+            except Exception:
+                extra_tags = []
         for tag in extra_tags or []:
             if isinstance(tag, (list, tuple)) and tag:
                 tags.append(list(tag))
@@ -47,7 +54,7 @@ class NostrFormatter(NotificationFormatter):
         ]
         content = "\n".join(lines)
         event.payload = {
-            "kind": 1,
+            "kind": 4,
             "content": content,
             "tags": self._build_tags(
                 host,

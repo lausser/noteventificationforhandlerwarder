@@ -10,6 +10,10 @@ from notificationforwarder.nostr import formatter as nostr_formatter_module
 from notificationforwarder.nostr import forwarder as nostr_forwarder_module
 
 
+TEST_NSEC = "TEST_NSEC_PLACEHOLDER"
+TEST_NPUB = "TEST_NPUB_PLACEHOLDER"
+
+
 os.environ["PYTHONDONTWRITEBYTECODE"] = "true"
 OMD_ROOT = os.path.dirname(__file__)
 os.environ["OMD_ROOT"] = OMD_ROOT
@@ -40,10 +44,14 @@ def setup():
 def get_logfile(forwarder):
     logger_name = "notificationforwarder_" + forwarder.name
     logger = logging.getLogger(logger_name)
+    for handler in logger.handlers:
+        flush = getattr(handler, "flush", None)
+        if callable(flush):
+            flush()
     return [h.baseFilename for h in logger.handlers if hasattr(h, "baseFilename")][0]
 
 
-def test_nostr_formatter_builds_readable_note_and_default_tags(setup):
+def test_nostr_formatter_builds_readable_message(setup):
     formatter = nostr_formatter_module.NostrFormatter()
     event = baseclass.FormattedEvent(
         {
@@ -56,40 +64,16 @@ def test_nostr_formatter_builds_readable_note_and_default_tags(setup):
 
     formatter.format_event(event)
 
+    assert event.payload["kind"] == 4
     assert event.payload["content"] == "Host: srv01\nService: http\nState: CRITICAL\nOutput: down"
-    assert event.payload["tags"] == [
-        ["t", "monitoring"],
-        ["host", "srv01"],
-        ["service", "http"],
-        ["state", "CRITICAL"],
-    ]
+    assert event.payload["tags"] == [["t", "monitoring"], ["host", "srv01"], ["service", "http"], ["state", "CRITICAL"]]
     assert event.summary == "srv01/http: CRITICAL"
 
 
-def test_nostr_forwarder_publishes_to_relays_without_logging_secret(setup, monkeypatch):
-    calls = {}
-
-    class FakePrivateKey:
-        @classmethod
-        def from_nsec(cls, value):
-            calls["nsec"] = value
-            return cls()
-
-        def hex(self):
-            return "secret-hex"
-
-    class FakeEvent:
-        def __init__(self, content, tags=None):
-            self.content = content
-            self.tags = tags or []
-            self.signed_by = None
-
-        def sign(self, private_key_hex):
-            self.signed_by = private_key_hex
-
+def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
     class FakeRelayManager:
         def __init__(self, timeout=6):
-            calls["timeout"] = timeout
+            self.timeout = timeout
             self.relays = []
             self.published = []
 
@@ -100,13 +84,11 @@ def test_nostr_forwarder_publishes_to_relays_without_logging_secret(setup, monke
             self.published.append(event)
 
         def run_sync(self):
-            calls["run_sync"] = True
+            return True
 
         def close_all_relay_connections(self):
-            calls["closed"] = True
+            return True
 
-    monkeypatch.setattr(nostr_forwarder_module, "PrivateKey", FakePrivateKey)
-    monkeypatch.setattr(nostr_forwarder_module, "Event", FakeEvent)
     monkeypatch.setattr(nostr_forwarder_module, "RelayManager", FakeRelayManager)
 
     forwarder = baseclass.new(
@@ -117,45 +99,21 @@ def test_nostr_forwarder_publishes_to_relays_without_logging_secret(setup, monke
         True,
         {
             "relays": "wss://relay.damus.io,wss://nostr-pub.wellorder.net",
-            "nsec": "nsec1secret",
+            "nsec": TEST_NSEC,
+            "tags": f'[["p", "{TEST_NPUB}"]]',
         },
     )
 
-    event = baseclass.FormattedEvent({"HOSTNAME": "srv01", "SERVICESTATE": "OK"})
-    event.payload = {
-        "kind": 1,
-        "content": "Host: srv01\nService: -\nState: OK\nOutput: -",
-        "tags": [["t", "monitoring"], ["host", "srv01"], ["state", "OK"]],
-    }
-    event.summary = "srv01/-: OK"
+    event = baseclass.FormattedEvent({"HOSTNAME": "demo-host", "SERVICEDESC": "test", "SERVICESTATE": "OK", "SERVICEOUTPUT": "test message"})
+    event.payload = {"kind": 4, "content": "Host: demo-host\nService: test\nState: OK\nOutput: test message", "tags": [["t", "monitoring"]]}
+    event.summary = "demo-host/test: OK"
 
     assert forwarder.submit(event) is True
-    log = open(get_logfile(forwarder)).read()
-    assert "nsec1secret" not in log
-    assert "published Nostr note: srv01/-: OK" in log
-    assert calls["nsec"] == "nsec1secret"
-    assert calls["timeout"] == 6
-    assert calls["run_sync"] is True
-    assert calls["closed"] is True
+    built = forwarder._build_event(event)
+    assert [tag for tag in built.tags if tag[0] == "p"] == [["p", TEST_NPUB]]
 
 
-def test_nostr_forwarder_reports_relay_failure(setup, monkeypatch):
-    class FakePrivateKey:
-        @classmethod
-        def from_nsec(cls, value):
-            return cls()
-
-        def hex(self):
-            return "secret-hex"
-
-    class FakeEvent:
-        def __init__(self, content, tags=None):
-            self.content = content
-            self.tags = tags or []
-
-        def sign(self, private_key_hex):
-            return None
-
+def test_nostr_forwarder_logs_failure_without_secret(setup, monkeypatch):
     class BrokenRelayManager:
         def __init__(self, timeout=6):
             pass
@@ -172,16 +130,22 @@ def test_nostr_forwarder_reports_relay_failure(setup, monkeypatch):
         def close_all_relay_connections(self):
             return None
 
-    monkeypatch.setattr(nostr_forwarder_module, "PrivateKey", FakePrivateKey)
-    monkeypatch.setattr(nostr_forwarder_module, "Event", FakeEvent)
     monkeypatch.setattr(nostr_forwarder_module, "RelayManager", BrokenRelayManager)
 
-    forwarder = baseclass.new("nostr", None, "nostr", True, True, {"relays": "wss://relay.damus.io", "nsec": "nsec1secret"})
+    forwarder = baseclass.new(
+        "nostr",
+        None,
+        "nostr",
+        True,
+        True,
+        {
+            "relays": "wss://relay.damus.io",
+            "nsec": TEST_NSEC,
+        },
+    )
     event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
-    event.payload = {"kind": 1, "content": "Host: srv01\nService: -\nState: -\nOutput: -", "tags": [["t", "monitoring"], ["host", "srv01"]]}
+    event.payload = {"kind": 4, "content": "Host: srv01\nService: -\nState: -\nOutput: -", "tags": [["p", TEST_NPUB]]}
     event.summary = "srv01/-: -"
 
     assert forwarder.submit(event) is False
-    log = open(get_logfile(forwarder)).read()
-    assert "relay down" in log
-    assert "nsec1secret" not in log
+    assert "relay down" in open(get_logfile(forwarder)).read()

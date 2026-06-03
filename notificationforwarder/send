@@ -1,0 +1,14 @@
+# nsec: nsec19f3pud45fmzwsrhzgsslkxccy20u65mzxxlm00culp2jevnrkewsc3ezwm
+# npub: npub1yyjul99qn2jcmgwe6rkudk9ufnkcqz92w3hhl8qhqqnq6t6a5uzqccwj65
+
+OMD_SITE=my_devel_site \
+notificationforwarder \
+  --forwarder nostr \
+  --formatter nostr \
+  --forwarderopt relays='wss://relay.damus.io,wss://nostr-pub.wellorder.net' \
+  --forwarderopt nsec='nsec1yourprivatekeyhere' \
+  --forwarderopt tags='[["p","npub1targetpubkeyhere"]]' \
+  --eventopt HOSTNAME='demo-host' \
+  --eventopt SERVICEDESC='cpu' \
+  --eventopt SERVICESTATE='CRITICAL' \
+  --eventopt SERVICEOUTPUT='CPU load high'
