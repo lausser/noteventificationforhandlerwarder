@@ -8,11 +8,11 @@ The system SHALL document the required structure, naming rules, and lifecycle ex
 - **THEN** the contributor can determine the expected module path, class naming convention, required methods, and event contract without reading runtime internals first
 
 ### Requirement: Core runtime behavior is covered by contributor-facing tests
-The system SHALL provide automated tests that demonstrate expected runtime behavior for component loading, logger fallback, delivery failure handling, spooling, and recovery flows.
+The system SHALL provide automated tests that demonstrate expected runtime behavior for component loading, logger fallback, delivery failure handling, spooling, recovery flows, and built-in plugin behavior across all formatters, forwarders, reporters, deciders, runners, and loggers.
 
-#### Scenario: Contributor changes runtime orchestration
-- **WHEN** a contributor modifies the runtime orchestration code
-- **THEN** the test suite detects regressions in core loading, forwarding, spooling, or logging behavior before release
+#### Scenario: Contributor changes runtime orchestration or a built-in plugin
+- **WHEN** a contributor modifies runtime orchestration code or a built-in plugin module
+- **THEN** the test suite detects regressions in core loading, forwarding, spooling, logging, or cross-subproject notification behavior before release
 
 ### Requirement: Operational guarantees are understandable from project documentation
 The system SHALL describe the intended runtime guarantees around failure handling, retry behavior, and logging so operators and contributors can reason about the system without reverse-engineering the code.

@@ -22,10 +22,9 @@ if not [p for p in sys.path if "pythonpath" in p]:
     sys.path.append(omd_root+"/pythonpath/local/lib/python")
     sys.path.append(omd_root+"/pythonpath/lib/python")
     sys.path.append(omd_root+"/../../notificationforwarder/src")
-    os.environ["PYTHONPATH"] = ":".join(sys.path)
 if not [p for p in sys.path if "notificationforwarder" in p]:
     sys.path.append(omd_root+"/../../notificationforwarder/src")
-    os.environ["PYTHONPATH"] = ":".join(sys.path)
+os.environ["PYTHONPATH"] = ":".join(sys.path)
 
 import notificationforwarder.baseclass
 
@@ -231,5 +230,4 @@ def test_eventhandler_failure_notification(server_fixture):
         notlog = f.read().strip()
     assert "signature=no_"+random_string in notlog
     assert "eventhandler for vongsrv04/some_service failed" in notlog
-
 

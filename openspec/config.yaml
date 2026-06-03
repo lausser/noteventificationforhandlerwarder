@@ -1,13 +1,37 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: Python 3.
+  We use conventional commits: one short title line, then up to 5 lines of details.
+
+  Domain: utilities for an OMD-based monitoring system.
+
+  Project purpose:
+    This repository contains two related Python subprojects that help automate monitoring workflows:
+    - sending notifications from monitoring systems to external targets
+    - running automated remediation actions when monitoring events occur
+
+  Subprojects:
+    - notificationforwarder: |
+        A flexible notification forwarder that can be extended with small Python plugins to send alerts to many kinds of destinations, such as webhooks, ticketing systems, or log receivers.
+        It uses a formatter to convert Nagios/OMD macros from an alert into a payload (for example JSON, XML, or a log line), then uses a forwarder to deliver that payload to the target system.
+        It can also use an optional reporter to write the result to a third-party system such as a monitoring log or audit log.
+    - eventhandler: |
+        A flexible event handler that can be extended with small Python plugins to run remediation actions for failed services or hosts.
+        It uses a decider to determine whether an action should run and how it should be prepared, for example by choosing command-line arguments or selecting a script based on the current check state.
+        It uses a runner to execute the command or API call that performs the recovery action.
+        It can also use an optional forwarder or logger to report the result to a third party.
+
+  Architecture:
+    - Plugin-based design with dynamically loaded Python modules.
+    - Event objects are mutated in place by formatters, deciders, and runners.
+    - The codebase is designed to reduce boilerplate while keeping integrations flexible and easy to extend.
+
+  OpenSpec guidance:
+    - Prefer precise, practical requirements.
+    - Include clear goals, non-goals, and acceptance criteria.
+    - Keep changes small and backward-compatible when possible.
+    - Favor wording that is specific enough for implementation but still easy to understand.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

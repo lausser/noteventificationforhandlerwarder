@@ -27,8 +27,11 @@ if not [p for p in sys.path if "pythonpath" in p]:
     print("PYTHONPATH="+":".join(sys.path))
 import notificationforwarder.baseclass
 
+REPORTER_PORT = None
+
 
 def _setup():
+    global omd_root
     omd_root = os.path.dirname(__file__)
     os.environ["OMD_ROOT"] = omd_root
     shutil.rmtree(omd_root+"/var", ignore_errors=True)
@@ -96,7 +99,7 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
 def start_server():
-    server = http.server.HTTPServer(('localhost', 8080), RequestHandler)
+    server = http.server.HTTPServer(('localhost', 0), RequestHandler)
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
@@ -108,8 +111,10 @@ def stop_server(server):
 
 @pytest.fixture
 def server_fixture(request):
+    global REPORTER_PORT
     _setup()
     server = start_server()
+    REPORTER_PORT = server.server_address[1]
     
     def fin():
         stop_server(server)
@@ -120,7 +125,7 @@ def server_fixture(request):
 
 def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": f"http://localhost:{REPORTER_PORT}",
         "username": "i_bims",
         "password": "i_bims_1_i_bims",
     }   
@@ -152,7 +157,7 @@ def test_forward_webhook_format_vong_bin_basic_auth(server_fixture):
 
 def test_forward_webhook_format_vong_bin_basic_auth_fail(server_fixture):
     forwarderopts = {
-        "url": "http://localhost:8080",
+        "url": f"http://localhost:{REPORTER_PORT}",
         "username": "i_bims",
         "password": "i_bums_1_i_bums",
     }   
