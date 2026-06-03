@@ -39,6 +39,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+nostr = [
+    "pynostr",
+]
 test = [
     "requests",
     "flake8",

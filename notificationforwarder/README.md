@@ -18,6 +18,8 @@ Let me list some of the formatter/forwarder combinations which are usually found
 |json          |Splunk HEC |
 |json          |RabbitMQ |
 
+|markdown-like Nostr note|Nostr relays |
+
 Of course json is not json, the attributes and values are different depending on the recipient.
 
 
@@ -240,6 +242,32 @@ There is also a SyslogFormatter, which creates the log line as:
 
 If you want a different format, then copy *lib/python/notificationforwarder/syslog/formatter.py* to *local/lib/python/notificationforwarder/syslog/formatter.py* and modify it like you want. Or, with *--formatter*, you can use whatever formatter is suitable, as long as it's payload attribute consists of a line of text.
 
+### Nostr
+
+The Nostr plugin pair publishes a markdown-like note with labeled lines and default monitoring tags.
+
+Install the optional Nostr support with `pip install omdnotificationforwarder[nostr]`.
+
+|parameter|description|default|
+|---------|-----------|-------|
+|relays|comma-separated relay URLs|`wss://relay.damus.io`|
+|nsec|bech32 private key for signing|required|
+|tags|extra Nostr tags to include|`monitoring` plus host/service/state tags|
+
+Example:
+
+```bash
+$USER1$/notificationforwarder \
+    --forwarder nostr \
+    --forwarderopt relays='wss://relay.damus.io,wss://nostr-pub.wellorder.net' \
+    --forwarderopt nsec='$NSEC$' \
+    --formatter nostr \
+    --eventopt HOSTNAME='$HOSTNAME$' \
+    --eventopt SERVICEDESC='$SERVICEDESC$' \
+    --eventopt SERVICESTATE='$SERVICESTATE$' \
+    --eventopt SERVICEOUTPUT='$SERVICEOUTPUT$'
+```
+
 ## Loggers
 
 The framework uses a modular logging architecture similar to formatters, forwarders, and reporters. By default, notificationforwarder uses **text format logging** - you don't need to do anything, logging works exactly as it did before. The traditional text format is backward compatible with all existing installations.
@@ -411,4 +439,3 @@ define command{
                     >> $USER4$/var/log/notificationforwarder_errors.log 2>&1
 }
 ```
-
