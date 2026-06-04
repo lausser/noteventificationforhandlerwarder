@@ -1,74 +1,10 @@
 import json
-import json
 
-try:
-    from pynostr.encrypted_dm import EncryptedDirectMessage
-    from pynostr.event import Event
-    from pynostr.key import PrivateKey, PublicKey
-    from pynostr.relay_manager import RelayManager
-except Exception:  # pragma: no cover - exercised when pynostr is unavailable
-    class EncryptedDirectMessage:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            self.cleartext_content = None
-            self.recipient_pubkey = None
-            self._event = None
-
-        def encrypt(self, private_key_hex, cleartext_content=None, recipient_pubkey=None):
-            self.cleartext_content = cleartext_content
-            self.recipient_pubkey = recipient_pubkey
-
-        def to_event(self):
-            event = Event(self.cleartext_content or "", tags=[["p", self.recipient_pubkey]] if self.recipient_pubkey else [])
-            event.kind = 4
-            return event
-
-    class PrivateKey:  # type: ignore
-        def __init__(self, value=None):
-            self._value = value or "nsec1fallback"
-
-        @classmethod
-        def from_nsec(cls, value):
-            return cls(value)
-
-        def hex(self):
-            return self._value
-
-    class PublicKey:  # type: ignore
-        def __init__(self, value=None):
-            self._value = value or ""
-
-        @classmethod
-        def from_npub(cls, value):
-            return cls(value)
-
-        def hex(self):
-            return self._value
-
-    class Event:  # type: ignore
-        def __init__(self, content, tags=None):
-            self.content = content
-            self.tags = tags or []
-            self.kind = 1
-
-        def sign(self, _private_key_hex):
-            return self
-
-    class RelayManager:  # type: ignore
-        def __init__(self, timeout=6):
-            self.timeout = timeout
-            self.relays = []
-
-        def add_relay(self, relay_url):
-            self.relays.append(relay_url)
-
-        def publish_event(self, event):
-            self.event = event
-
-        def run_sync(self):
-            return True
-
-        def close_all_relay_connections(self):
-            return True
+from pynostr.encrypted_dm import EncryptedDirectMessage
+from pynostr.event import Event
+from pynostr.key import PrivateKey, PublicKey
+import pynostr.relay as relay_mod
+from pynostr.relay_manager import RelayManager
 
 from notificationforwarder.baseclass import NotificationForwarder, timeout
 
@@ -185,6 +121,11 @@ class NostrForwarder(NotificationForwarder):
             )
             nostr_event = dm.to_event()
             nostr_event.sign(private_key.hex())
+
+            orig_websocket_connect = relay_mod.websocket_connect
+            relay_mod.websocket_connect = lambda *a, **k: orig_websocket_connect(
+                *a, **{**k, "ping_timeout": min(k.get("ping_timeout", 0), k.get("ping_interval", 0))}
+            )
 
             relay_manager = RelayManager(timeout=self.timeout_seconds)
             for relay_url in relay_urls:

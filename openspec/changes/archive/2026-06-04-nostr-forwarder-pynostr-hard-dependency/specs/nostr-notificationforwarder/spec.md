@@ -1,8 +1,4 @@
-## Purpose
-
-Deliver monitoring notifications as encrypted Nostr direct messages so they arrive in chat-oriented clients while preserving readable alert content and the existing notificationforwarder runtime model.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Nostr relay publishing
 The `notificationforwarder` system MUST be able to publish a formatted monitoring notification as an encrypted Nostr direct message to a configured recipient through one or more configured relays.
@@ -15,19 +11,6 @@ The `notificationforwarder` system MUST be able to publish a formatted monitorin
 #### Scenario: Relay publish failure
 - **WHEN** a relay cannot accept or deliver the published event
 - **THEN** the forwarder MUST report the failure so the existing retry path can handle it
-
-### Requirement: Quiet Nostr websocket startup
-The `notificationforwarder` system MUST avoid emitting the known `websocket_ping_timeout` warning during normal Nostr forwarder initialization.
-
-#### Scenario: Default Nostr startup does not warn
-- **WHEN** the Nostr forwarder starts with its standard websocket configuration
-- **THEN** the runtime MUST not print the `websocket_ping_timeout` warning to the console or logs
-- **AND** Nostr publishing MUST continue to work normally
-
-#### Scenario: Warning suppression does not change delivery behavior
-- **WHEN** the forwarder initializes a relay connection after applying the quiet startup behavior
-- **THEN** the relay connection MUST still be usable for publishing notifications
-- **AND** the system MUST preserve the existing fail-fast behavior for missing `pynostr`
 
 ### Requirement: Nostr event shaping
 The `notificationforwarder` system MUST provide a formatter that maps monitoring event fields into Nostr message content and recipient tags for direct message delivery.

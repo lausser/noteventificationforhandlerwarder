@@ -1,17 +1,35 @@
 import logging
 import os
+import subprocess
 import shutil
 import sys
+import importlib
 
 import pytest
 
 from notificationforwarder import baseclass
-from notificationforwarder.nostr import formatter as nostr_formatter_module
-from notificationforwarder.nostr import forwarder as nostr_forwarder_module
 
 
 TEST_NSEC = "TEST_NSEC_PLACEHOLDER"
 TEST_NPUB = "TEST_NPUB_PLACEHOLDER"
+
+
+def _generated_keypair():
+    pytest.importorskip("pynostr")
+    from pynostr.key import PrivateKey
+
+    private_key = PrivateKey()
+    return private_key.nsec, private_key.public_key.npub
+
+
+def _nostr_forwarder_module():
+    pytest.importorskip("pynostr")
+    return importlib.import_module("notificationforwarder.nostr.forwarder")
+
+
+def _pynostr_relay_module():
+    pytest.importorskip("pynostr")
+    return importlib.import_module("pynostr.relay")
 
 
 os.environ["PYTHONDONTWRITEBYTECODE"] = "true"
@@ -52,7 +70,8 @@ def get_logfile(forwarder):
 
 
 def test_nostr_formatter_builds_readable_message(setup):
-    formatter = nostr_formatter_module.NostrFormatter()
+    formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+    formatter = formatter_module.NostrFormatter()
     event = baseclass.FormattedEvent(
         {
             "HOSTNAME": "srv01",
@@ -71,6 +90,8 @@ def test_nostr_formatter_builds_readable_message(setup):
 
 
 def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
+    nostr_forwarder_module = _nostr_forwarder_module()
+
     class FakeRelayManager:
         def __init__(self, timeout=6):
             self.timeout = timeout
@@ -91,6 +112,8 @@ def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
 
     monkeypatch.setattr(nostr_forwarder_module, "RelayManager", FakeRelayManager)
 
+    test_nsec, test_npub = _generated_keypair()
+
     forwarder = baseclass.new(
         "nostr",
         None,
@@ -99,8 +122,8 @@ def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
         True,
         {
             "relays": "wss://relay.damus.io,wss://nostr-pub.wellorder.net",
-            "nsec": TEST_NSEC,
-            "tags": f'[["p", "{TEST_NPUB}"]]',
+            "nsec": test_nsec,
+            "tags": f'[["p", "{test_npub}"]]',
         },
     )
 
@@ -110,10 +133,14 @@ def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
 
     assert forwarder.submit(event) is True
     built = forwarder._build_event(event)
-    assert [tag for tag in built.tags if tag[0] == "p"] == [["p", TEST_NPUB]]
+    from pynostr.key import PublicKey
+
+    assert [tag for tag in built.tags if tag[0] == "p"] == [["p", PublicKey.from_npub(test_npub).hex()]]
 
 
 def test_nostr_forwarder_logs_failure_without_secret(setup, monkeypatch):
+    nostr_forwarder_module = _nostr_forwarder_module()
+
     class BrokenRelayManager:
         def __init__(self, timeout=6):
             pass
@@ -132,6 +159,8 @@ def test_nostr_forwarder_logs_failure_without_secret(setup, monkeypatch):
 
     monkeypatch.setattr(nostr_forwarder_module, "RelayManager", BrokenRelayManager)
 
+    test_nsec, test_npub = _generated_keypair()
+
     forwarder = baseclass.new(
         "nostr",
         None,
@@ -140,12 +169,93 @@ def test_nostr_forwarder_logs_failure_without_secret(setup, monkeypatch):
         True,
         {
             "relays": "wss://relay.damus.io",
-            "nsec": TEST_NSEC,
+            "nsec": test_nsec,
         },
     )
     event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
-    event.payload = {"kind": 4, "content": "Host: srv01\nService: -\nState: -\nOutput: -", "tags": [["p", TEST_NPUB]]}
+    event.payload = {"kind": 4, "content": "Host: srv01\nService: -\nState: -\nOutput: -", "tags": [["p", test_npub]]}
     event.summary = "srv01/-: -"
 
     assert forwarder.submit(event) is False
     assert "relay down" in open(get_logfile(forwarder)).read()
+
+
+def test_nostr_forwarder_requires_pynostr(setup, monkeypatch):
+    script = """
+import builtins
+import os
+import sys
+
+original_import = builtins.__import__
+
+def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if name.startswith("pynostr"):
+        raise ImportError("missing pynostr")
+    return original_import(name, globals, locals, fromlist, level)
+
+sys.path.append(os.path.join(os.environ["OMD_ROOT"], "pythonpath", "local", "lib", "python"))
+sys.path.append(os.path.join(os.environ["OMD_ROOT"], "pythonpath", "lib", "python"))
+sys.path.append(os.path.join(os.environ["OMD_ROOT"], "..", "src"))
+builtins.__import__ = fake_import
+
+import notificationforwarder.nostr.forwarder
+"""
+
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
+
+    assert result.returncode != 0
+    assert "missing pynostr" in result.stderr
+    
+
+
+def test_nostr_forwarder_clamps_websocket_timeout_and_still_initializes(setup, monkeypatch):
+    nostr_forwarder_module = _nostr_forwarder_module()
+    pynostr_relay = _pynostr_relay_module()
+
+    captured = {}
+
+    def fake_websocket_connect(*args, **kwargs):
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(pynostr_relay, "websocket_connect", fake_websocket_connect)
+
+    class FakeRelayManager:
+        def __init__(self, timeout=6):
+            self.timeout = timeout
+
+        def add_relay(self, relay_url):
+            self.relay_url = relay_url
+
+        def publish_event(self, event):
+            self.event = event
+
+        def run_sync(self):
+            pynostr_relay.websocket_connect("ws://example", ping_interval=60, ping_timeout=120)
+
+        def close_all_relay_connections(self):
+            return True
+
+    monkeypatch.setattr(nostr_forwarder_module, "RelayManager", FakeRelayManager)
+
+    test_nsec, test_npub = _generated_keypair()
+    forwarder = baseclass.new(
+        "nostr",
+        None,
+        "nostr",
+        True,
+        True,
+        {
+            "relays": "wss://relay.damus.io",
+            "nsec": test_nsec,
+            "tags": f'[["p", "{test_npub}"]]',
+        },
+    )
+
+    event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
+    event.payload = {"kind": 4, "content": "Host: srv01\nService: -\nState: -\nOutput: -", "tags": [["p", test_npub]]}
+    event.summary = "srv01/-: -"
+
+    assert forwarder.submit(event) is True
+    assert captured["kwargs"]["ping_interval"] == 60
+    assert captured["kwargs"]["ping_timeout"] == 60
