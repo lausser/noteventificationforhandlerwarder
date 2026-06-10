@@ -91,6 +91,64 @@ def test_split3_forwarder_split4_formatter(setup):
     assert re.search(r'forwarder '+split3.__module_file__, log)
     assert re.search(r'formatter '+fsplit3.__module_file__, log)
 
+
+def test_formatter_module_logging_uses_runtime_logfile(setup):
+    forwarderopts = {
+        "username": "i_bims",
+        "password": "dem_is_geheim"
+    }
+    eventopts = {
+        "alertmanager_payload": {
+            "receiver": "omd-servicenow-webhook",
+            "status": "firing",
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "4490",
+                        "instance": "4490.example.net",
+                        "service": "my-service",
+                        "severity": "critical",
+                        "snow_service_name": "routemetosvcnow"
+                    },
+                    "annotations": {
+                        "summary": "Testing summary!"
+                    },
+                    "startsAt": "2024-03-15T19:51:51.78480206Z",
+                    "endsAt": "0001-01-01T00:00:00Z",
+                    "generatorURL": "https://prometheus.local/<generating_expression>",
+                    "fingerprint": "5de8a3a5c73e68d4"
+                }
+            ],
+            "groupLabels": {
+                "alertname": "4490",
+                "service": "my-service"
+            },
+            "commonLabels": {
+                "alertname": "4490",
+                "instance": "4490.example.net",
+                "service": "my-service",
+                "severity": "critical",
+                "snow_service_name": "routemetosvcnow"
+            },
+            "commonAnnotations": {
+                "summary": "Testing summary!"
+            },
+            "externalURL": "http://omd-lx01.example.com/alertmanager/alertmanager",
+            "version": "4",
+            "groupKey": "{}/{alertname=~\"^(?:.*)$\",snow_service_name=~\"^(?:..*)$\"}:{alertname=\"4490\", service=\"my-service\"}",
+            "truncatedAlerts": 0
+        }
+    }
+
+    amgw = notificationforwarder.baseclass.new("webhook", None, "alertmanager_servicenow", True, True, forwarderopts)
+    amgw.forward(eventopts)
+
+    log = open(get_logfile(amgw)).read()
+    assert "event has no node" in log
+    assert "replace node with 4490.example.net" in log
+    assert "job: " in log
+
 def test_split3_forwarder_split4_formatter_bin_old(setup):
     # this is used to find out the logfile
     forwarderopts = {
@@ -122,5 +180,4 @@ def test_split3_forwarder_split4_formatter_bin(setup):
     subprocess.call("OMD_SITE=my_devel_site OMD_ROOT={} PYTHONPATH={} {} --forwarder split3 --forwarderopt  username=i_bims --forwarderopt password=dem_is_geheim --formatter split4 --eventopt description='halo i bims 1 alarm vong naemon her' --eventopt signature={}".format(omd_root, pythonpath, cmd, signature), shell=True)
     log = open(get_logfile(split3)).read()
     assert "split4_"+signature+"_split4" in log
-
 

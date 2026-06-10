@@ -18,7 +18,7 @@ from importlib import import_module
 from importlib.util import find_spec, module_from_spec
 
 import logging
-from coshsh.util import setup_logging
+from eventhandler.util import setup_logging
 
 
 logger = None

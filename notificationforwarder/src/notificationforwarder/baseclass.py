@@ -11,7 +11,7 @@ except ImportError:
     import json
 
 import logging
-from coshsh.util import setup_logging
+from notificationforwarder.util import setup_logging
 from importlib import import_module
 
 from notificationforwarder.component_loader import (

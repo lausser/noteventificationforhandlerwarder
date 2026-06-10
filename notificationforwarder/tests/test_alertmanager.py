@@ -149,7 +149,7 @@ def test_alertmanager_forwarder(setup):
     }
 
 
-    amgw = notificationforwarder.baseclass.new("webhook", None, "alertmanager_servicenow", False, False,  forwarderopts)
+    amgw = notificationforwarder.baseclass.new("webhook", None, "alertmanager_servicenow", True, True,  forwarderopts)
     famgw = amgw.new_formatter()
     assert famgw.__class__.__name__ == "AlertmanagerServicenowFormatter"
     assert famgw.__module_file__.endswith("pythonpath/local/lib/python/notificationforwarder/alertmanager_servicenow/formatter.py")
@@ -158,9 +158,10 @@ def test_alertmanager_forwarder(setup):
 
     amgw.forward(eventopts)
     log = open(get_logfile(amgw)).read()
+    assert "event has no node" in log
+    assert "replace node with 4490.example.net" in log
     assert re.search(r'success: alertmanager sends 2 alarms.*result is .*"records": 2.*4490.*4491.*', log, flags=re.MULTILINE)
 
     http_server.shutdown()
-
 
 

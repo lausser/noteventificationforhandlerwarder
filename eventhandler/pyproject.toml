@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "coshsh"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
@@ -34,7 +34,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "coshsh",
     "jinja2",
 ]
 

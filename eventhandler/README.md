@@ -26,7 +26,8 @@ define command{
 The Decider component evaluates whether an event should be handled based on the specified conditions. It considers factors such as current state, state type, attempt count, downtime, etc., and returns a set of parameters indicating the action to be taken.
 The binary **lib/monitoring-plugins/eventhandler** takes multiple *\-\-eventopt KEY=VALUE*, which are usually Naemon macros. These key-value pairs are found in the dict *event.eventopts*.
 
-Runtime behavior is split into clear checkpoints: event enrichment, decider loading, decision preparation, runner execution, optional forwarding, and logging. When something fails, the runtime now reports which component failed and which resolution rule it attempted.
+Runtime behavior is split into clear checkpoints: event enrichment, decider loading, decision preparation, runner execution, optional forwarding, and logging. When something fails, the runtime reports which component failed and which resolution rule it attempted.
+Logging uses the framework's native setup with the standard logfile naming, format, and `--debug` / `--verbose` behavior.
 
 Here is an example for a decider which is used in a self-monitoring setup. Its job is to restart an OMD instance or at least stopped/failed processes.
 

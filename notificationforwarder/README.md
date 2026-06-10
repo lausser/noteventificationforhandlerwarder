@@ -3,6 +3,7 @@
 In this framework, two aspects are in the focus. How to transport a notification to the recipient system and in which format.
 In the beginning, Naemon or one of the other monitoring cores will execute a command line. The actual script and the individual command line parameters are defined in a command definition. Typical parameters are (i use the notation of Nagios macros) HOSTNAME, SERVICEDESC, SERVICESTATE, SERVICEOUTPUT. These snippets need to be put together to some kind of payload suitable for the receiving system. And then this payload must be transported to it. We call the two components *formatter* and *forwarder*. The formatter takes the raw input data and creates a payload and the forwarder transmits the payload to the destination.
 What the framework does for you behind the scenes: When forwarding to a recipient fails, the event is saved in a local sqlite database for a certain time and re-sent when the script is called next time and the recipient is available again. Logging of successful and of course failed deliveries is also done automatically.  
+Logging uses the framework's native setup with the standard logfile naming and format used by the built-in tools.
 There is also a component *reporter* which will rarely be used. It's purpose is to run additional code after a successful or failed delivery.  
 
 Let me list some of the formatter/forwarder combinations which are usually found in enterprise environments:

@@ -1,5 +1,12 @@
-# nsec: nsec19f3pud45fmzwsrhzgsslkxccy20u65mzxxlm00culp2jevnrkewsc3ezwm
-# npub: npub1yyjul99qn2jcmgwe6rkudk9ufnkcqz92w3hhl8qhqqnq6t6a5uzqccwj65
+# Create a key pair for the client
+
+from pynostr.key import PrivateKey
+pk = PrivateKey()
+print("nsec:", pk.bech32())
+print("npub:", pk.public_key.bech32())
+
+
+# Then use these keys when you send an event
 
 OMD_SITE=my_devel_site \
 notificationforwarder \
