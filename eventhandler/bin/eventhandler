@@ -7,7 +7,7 @@ import re
 import os
 import sys
 sys.dont_write_bytecode = True
-from coshsh.util import setup_logging
+from eventhandler.util import setup_logging
 from eventhandler import baseclass
 from notificationforwarder import baseclass as f_baseclass
 import traceback
