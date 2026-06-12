@@ -1,14 +1,3 @@
-"""Generate a Nostr keypair and derive bech32 values.
-
-```python
-from pynostr.key import PrivateKey
-
-private_key = PrivateKey()
-print(private_key.bech32())          # nsec1...
-print(private_key.public_key.bech32())  # npub1...
-```
-"""
-
 import json
 
 from notificationforwarder.baseclass import NotificationFormatter
@@ -54,7 +43,6 @@ class NostrFormatter(NotificationFormatter):
         ]
         content = "\n".join(lines)
         event.payload = {
-            "kind": 4,
             "content": content,
             "tags": self._build_tags(
                 host,

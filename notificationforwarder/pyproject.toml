@@ -39,7 +39,7 @@ dependencies = [
 
 [project.optional-dependencies]
 nostr = [
-    "pynostr",
+    "nostr-sdk",
 ]
 test = [
     "requests",

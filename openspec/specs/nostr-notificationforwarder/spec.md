@@ -1,6 +1,6 @@
 ## Purpose
 
-Deliver monitoring notifications as encrypted Nostr direct messages so they arrive in chat-oriented clients while preserving readable alert content and the existing notificationforwarder runtime model.
+Deliver monitoring notifications as encrypted Nostr direct messages using the `nostr-sdk` library, supporting both NIP-04 and NIP-17 protocols.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ The `notificationforwarder` system MUST avoid emitting the known `websocket_ping
 #### Scenario: Warning suppression does not change delivery behavior
 - **WHEN** the forwarder initializes a relay connection after applying the quiet startup behavior
 - **THEN** the relay connection MUST still be usable for publishing notifications
-- **AND** the system MUST preserve the existing fail-fast behavior for missing `pynostr`
+- **AND** the system MUST preserve the existing fail-fast behavior for missing `nostr-sdk`
 
 ### Requirement: Nostr event shaping
 The `notificationforwarder` system MUST provide a formatter that maps monitoring event fields into Nostr message content and recipient tags for direct message delivery.
@@ -59,9 +59,31 @@ The `notificationforwarder` system MUST include a `monitoring` tag and event-spe
 - **THEN** the message MUST include the `monitoring` tag and tags derived from host, service, and state when those values are present
 
 ### Requirement: Nostr dependency failure behavior
-The `notificationforwarder` system MUST fail fast when the `pynostr` dependency is unavailable instead of substituting local fallback implementations.
+The `notificationforwarder` system MUST fail fast when the `nostr-sdk` dependency is unavailable instead of substituting local fallback implementations.
 
 #### Scenario: Import dependency is missing
-- **WHEN** the Nostr forwarder module is loaded and `pynostr` cannot be imported
+- **WHEN** the Nostr forwarder module is loaded and `nostr-sdk` cannot be imported
 - **THEN** the import MUST raise an exception and the baseclass error handling MUST report the failure
-- **AND** the module MUST NOT create local stand-in classes for `EncryptedDirectMessage`, `Event`, `PrivateKey`, `PublicKey`, or `RelayManager`
+- **AND** the module MUST NOT create local stand-in classes for `Client`, `Keys`, `NostrSigner`, `PublicKey`, or `RelayUrl`
+
+### Requirement: Support both NIP-04 and NIP-17 Nostr protocols
+The Nostr forwarder MUST support publishing encrypted direct messages using either NIP-04 (standard encrypted DM) or NIP-17 (private DM) protocols based on configuration.
+
+#### Scenario: NIP-04 mode configuration
+- **WHEN** the forwarder is configured with `nip_mode=nip04` (or no mode specified)
+- **THEN** the system MUST publish messages using the NIP-04 protocol via the `nostr-sdk` library
+- **AND** messages MUST be published to configured relays with encryption for the recipient
+
+#### Scenario: NIP-17 mode configuration
+- **WHEN** the forwarder is configured with `nip_mode=nip17`
+- **THEN** the system MUST publish messages using the NIP-17 private DM protocol via the `nostr-sdk` library
+- **AND** messages MUST be wrapped using NIP-59 Gift Wrap semantics
+
+#### Scenario: NIP mode selection is logged
+- **WHEN** the forwarder initializes a publishing operation
+- **THEN** a DEBUG log entry MUST indicate which NIP mode is being used
+
+#### Scenario: Formatter output is protocol-agnostic
+- **WHEN** the Nostr formatter processes an event
+- **THEN** it MUST produce a payload with content and tags without hardcoding protocol-specific event kind
+- **AND** the forwarder MUST determine the final protocol based on configuration
