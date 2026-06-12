@@ -21,7 +21,7 @@ packages = ["src/eventhandler"]
 
 [project]
 name = "omdeventhandler"
-version = "2.1"
+version = "2.2"
 authors = [
   { name="Gerhard Lausser", email="lausser@yahoo.com" },
 ]
