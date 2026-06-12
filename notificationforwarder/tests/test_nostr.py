@@ -131,8 +131,7 @@ def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
     assert captured["urls"] == ["wss://relay.damus.io", "wss://nostr-pub.wellorder.net"]
     assert captured["receiver"] == test_npub
     assert captured["message"] == "Host: demo-host\nService: test\nState: OK\nOutput: test message"
-    assert len(captured["tags"]) == 1
-    assert captured["tags"][0][0] == "p"
+    assert captured["tags"] == []
 
 
 def test_nostr_forwarder_logs_failure_without_secret(setup, monkeypatch):
