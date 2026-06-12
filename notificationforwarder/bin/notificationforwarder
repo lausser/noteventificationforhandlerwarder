@@ -6,7 +6,7 @@ import logging.handlers
 import os
 import sys
 #import logging
-from coshsh.util import setup_logging
+from notificationforwarder.util import setup_logging
 from notificationforwarder import baseclass
 import traceback
 
