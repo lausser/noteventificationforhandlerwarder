@@ -116,8 +116,11 @@ class NostrForwarder(NotificationForwarder):
             nip_mode = self._nip_mode()
             logger.debug("Nostr NIP mode: {}".format(nip_mode))
             if nip_mode == "nip17":
-                asyncio.run(self._send_private_msg(relay_urls, recipient_pubkey, message, []))
+                # For NIP-17, use tags from payload (like [["t", "monitoring"]])
+                tags = self._tags(event)
+                asyncio.run(self._send_private_msg(relay_urls, recipient_pubkey, message, tags))
             else:
+                # NIP-04: send without tags (nostr-sdk doesn't support NIP-04 tags easily)
                 asyncio.run(self._send_nip04_dm(relay_urls, recipient_pubkey, message))
             logger.info("published Nostr DM: {}".format(event.summary))
             self.no_more_logging()
