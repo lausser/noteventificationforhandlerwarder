@@ -14,11 +14,11 @@ class NostrFormatter(NotificationFormatter):
     def _build_tags(self, host, service, state, extra_tags=None):
         tags = [["t", "monitoring"]]
         if host:
-            tags.append(["host", host])
+            tags.append(["t", "host=" + host])
         if service:
-            tags.append(["service", service])
+            tags.append(["t", "service=" + service])
         if state:
-            tags.append(["state", state])
+            tags.append(["t", "state=" + state])
         if isinstance(extra_tags, str):
             try:
                 extra_tags = json.loads(extra_tags)
