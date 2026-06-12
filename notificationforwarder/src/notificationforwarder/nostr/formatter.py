@@ -41,7 +41,7 @@ class NostrFormatter(NotificationFormatter):
             f"State: {state or '-'}",
             f"Output: {output or '-'}",
         ]
-        content = "\n".join(lines)
+        content = "\n".join(lines) + "\n\n#monitoring"
         event.payload = {
             "content": content,
             "tags": self._build_tags(
