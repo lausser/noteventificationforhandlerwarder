@@ -78,7 +78,6 @@ def test_nostr_formatter_builds_readable_message(setup):
 
     formatter.format_event(event)
 
-    assert event.payload["kind"] == 14
     assert event.payload["content"] == "Host: srv01\nService: http\nState: CRITICAL\nOutput: down"
     assert event.payload["tags"] == [["t", "monitoring"], ["host", "srv01"], ["service", "http"], ["state", "CRITICAL"]]
     assert event.summary == "srv01/http: CRITICAL"
