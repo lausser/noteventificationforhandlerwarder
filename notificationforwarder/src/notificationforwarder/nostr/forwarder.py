@@ -80,7 +80,7 @@ class NostrForwarder(NotificationForwarder):
         await client.connect()
         return await client.send_private_msg_to(relay_urls, receiver_pubkey, message, tags)
 
-    async def _send_nip04_dm(self, relay_urls, receiver_pubkey, message):
+    async def _send_nip04_dm(self, relay_urls, receiver_pubkey, message, tags):
         uniffi_set_event_loop(asyncio.get_running_loop())
         keys = self._keys()
         signer = NostrSigner.keys(keys)
@@ -91,7 +91,7 @@ class NostrForwarder(NotificationForwarder):
             await client.add_relay(relay_url)
 
         await client.connect()
-        return await client.send_private_msg_to(relay_urls, receiver_pubkey, message, [])
+        return await client.send_private_msg_to(relay_urls, receiver_pubkey, message, tags)
 
     @timeout(30)
     def submit(self, event):
@@ -115,11 +115,15 @@ class NostrForwarder(NotificationForwarder):
             message = payload.get("content", event.summary or str(payload))
             nip_mode = self._nip_mode()
             logger.debug("Nostr NIP mode: {}".format(nip_mode))
+            tags = self._configured_tags() or payload.get("tags", [])
             if nip_mode == "nip17":
                 tags = self._tags(event)
                 asyncio.run(self._send_private_msg(relay_urls, recipient_pubkey, message, tags))
             else:
-                asyncio.run(self._send_nip04_dm(relay_urls, recipient_pubkey, message))
+                # Convert raw tags (list of lists) to Tag objects for nostr-sdk
+                from nostr_sdk import Tag
+                tags = [Tag.parse(list(t)) for t in (tags or [])]
+                asyncio.run(self._send_nip04_dm(relay_urls, recipient_pubkey, message, tags))
             logger.info("published Nostr DM: {}".format(event.summary))
             self.no_more_logging()
             return True

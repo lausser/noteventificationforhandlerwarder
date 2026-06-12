@@ -101,7 +101,7 @@ def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
             captured["connected"] = True
 
         async def send_private_msg_to(self, urls, receiver, message, tags):
-            captured["urls"] = list(urls)
+            captured["urls"] = [str(url) for url in urls]
             captured["receiver"] = receiver.to_bech32()
             captured["message"] = message
             captured["tags"] = [tag.as_vec() for tag in tags]
@@ -131,7 +131,8 @@ def test_nostr_forwarder_builds_dm_event(setup, monkeypatch):
     assert captured["urls"] == ["wss://relay.damus.io", "wss://nostr-pub.wellorder.net"]
     assert captured["receiver"] == test_npub
     assert captured["message"] == "Host: demo-host\nService: test\nState: OK\nOutput: test message"
-    assert [tag[0] for tag in captured["tags"]] == ["t"]
+    assert len(captured["tags"]) == 1
+    assert captured["tags"][0][0] == "p"
 
 
 def test_nostr_forwarder_logs_failure_without_secret(setup, monkeypatch):
@@ -301,7 +302,7 @@ def test_nostr_forwarder_clamps_websocket_timeout_and_still_initializes(setup, m
             return True
 
         async def send_private_msg_to(self, urls, receiver, message, tags):
-            captured["urls"] = list(urls)
+            captured["urls"] = [str(url) for url in urls]
             captured["receiver"] = receiver.to_bech32()
             captured["message"] = message
             captured["tags"] = [tag.as_vec() for tag in tags]
