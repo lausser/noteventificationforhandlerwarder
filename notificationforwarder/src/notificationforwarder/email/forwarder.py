@@ -5,6 +5,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
+logger = logging.getLogger("notificationforwarder.email")
+
 class EmailForwarder(NotificationForwarder):
     def __init__(self, opts):
         super(self.__class__, self).__init__(opts)
@@ -31,6 +33,6 @@ class EmailForwarder(NotificationForwarder):
             server.quit()
             return True
         except Exception as e:
-            logging.critical("sending mail failed: {}".format(str(e)))
+            logger.critical("sending mail failed: {}".format(str(e)))
             return False
 

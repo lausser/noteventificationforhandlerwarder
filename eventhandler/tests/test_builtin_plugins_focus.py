@@ -124,9 +124,11 @@ def test_builtin_runners_render_expected_commands(setup):
     assert "check_nsc_web -k -u https://nsc:9443 -p 'secret' -t 180 check_uptime '-w 10'" in nsc_runner.run(_decided_event({"payload": {}}))
 
 
-def test_ssh_runner_import_is_not_covered_due_to_missing_dependency(setup):
-    with pytest.raises(Exception):
-        SshRunner({"username": "root", "hostname": "remote", "port": 2222, "identity_file": "~/.ssh/id_rsa", "command": "uptime"})
+def test_ssh_runner_instantiates_with_identity_file(setup):
+    runner = SshRunner({"username": "root", "hostname": "remote", "port": 2222, "identity_file": "~/.ssh/id_rsa", "command": "uptime"})
+    assert runner.hostname == "remote"
+    assert runner.identity_file is not None
+    assert "~" not in runner.identity_file
 
 
 def test_handle_forwards_execution_results_and_survives_forwarder_errors(setup, monkeypatch):

@@ -1,4 +1,4 @@
-from eventhandler.baseclass import EventhandlerRunner
+from eventhandler.baseclass import EventhandlerRunner, resolve_identity_file
 
 class SshRunner(EventhandlerRunner):
 

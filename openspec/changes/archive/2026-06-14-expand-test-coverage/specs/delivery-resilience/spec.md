@@ -1,34 +1,4 @@
-## Purpose
-
-Guarantee that delivery failures are durably persisted or explicitly surfaced, retries are bounded, concurrent flush is safe, and recovery is observable — so operators can trust the system handles downstream outages correctly.
-## Requirements
-### Requirement: Failed deliveries are either persisted or explicitly surfaced
-The system SHALL ensure that a failed delivery attempt results in one of two observable outcomes: the event is durably spooled for retry within the configured retention window, or the runtime emits an explicit error describing why spooling could not be completed.
-
-#### Scenario: Submission fails and event is spooled
-- **WHEN** a forwarder submit operation returns failure for a formatted event
-- **THEN** the runtime stores the event in the spool and logs that the event will be retried
-
-### Requirement: Retry behavior is bounded by retention policy
-The system SHALL retry previously spooled events only while they remain inside the configured spool retention window, and SHALL stop retrying expired events in a visible and deterministic way.
-
-#### Scenario: Expired spooled event is encountered during flush
-- **WHEN** the runtime processes a spooled event that is older than the configured retention window
-- **THEN** the runtime removes or skips that event according to the documented policy and logs that the event expired
-
-### Requirement: Flush execution avoids unsafe concurrent replay
-The system SHALL protect flush operations against unsafe concurrent execution for the same forwarder instance so that the same spooled event is not replayed multiple times by overlapping flush attempts.
-
-#### Scenario: Concurrent flush attempt is detected
-- **WHEN** a second flush attempt starts while another flush for the same forwarder is already in progress
-- **THEN** the runtime prevents overlapping replay for that forwarder instance and records that the concurrent flush was suppressed or deferred
-
-### Requirement: Recovery attempts are observable
-The system SHALL log enough structured information about spool counts, retry attempts, retry outcomes, and final delivery outcomes so that operators can understand whether the system is recovering from downstream failures.
-
-#### Scenario: Spool replay succeeds after prior failures
-- **WHEN** previously spooled events are flushed successfully
-- **THEN** the runtime logs how many events were retried and that delivery recovery succeeded
+## ADDED Requirements
 
 ### Requirement: Resilience tests live in a clearly named layer and cover both shipped and own-module paths uniformly
 The system SHALL place all resilience/spool/heartbeat/probe/enrichment/formatter-failure/spool-replay tests in a dedicated flat layer file (test_resilience_spool.py on notificationforwarder, test_resilience_concurrency.py on eventhandler) that exercises the same behaviors whether the formatter/forwarder/decider/runner under test is a shipped module or a user-written module loaded from the pythonpath fixtures.
@@ -111,4 +81,3 @@ The system SHALL remove spooled events that are discarded during replay (logging
 #### Scenario: spool-flush-beyond-batch-limit
 - **WHEN** more than 10 events are spooled and flush runs with fetch_batch(limit=10)
 - **THEN** the stuck-detection logic (last_events_to_flush == events_to_flush) triggers correctly and the final "spool replay summary" reports accurate attempted/recovered/stayed/deleted_trash counts
-

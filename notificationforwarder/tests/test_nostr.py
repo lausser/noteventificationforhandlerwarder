@@ -353,3 +353,349 @@ def test_nostr_forwarder_fails_without_recipient_tag(setup):
 
     with pytest.raises(ValueError, match="recipient p tag"):
         forwarder.submit(event)
+
+
+# ============================================================================
+# Nostr tests for missing p tag, host-only, aliases, nsec, relay failure
+# ============================================================================
+
+class TestNostrMissingPTag:
+    def test_missing_p_tag_fails_with_recipient_mention(self, setup):
+        """Missing p tag raises ValueError mentioning recipient."""
+        test_nsec, _ = _generated_keypair()
+
+        forwarder = baseclass.new(
+            "nostr",
+            None,
+            "nostr",
+            True,
+            True,
+            {
+                "relays": "wss://relay.damus.io",
+                "nsec": test_nsec,
+            },
+        )
+
+        event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
+        event.payload = {"kind": 14, "content": "test", "tags": [["t", "monitoring"]]}
+        event.summary = "test"
+
+        with pytest.raises(ValueError, match="recipient p tag"):
+            forwarder.submit(event)
+
+    def test_missing_p_tag_spools_via_forward(self, setup, monkeypatch):
+        """Missing p tag causes event to be spooled via forward()."""
+        test_nsec, _ = _generated_keypair()
+
+        forwarder = baseclass.new(
+            "nostr",
+            None,
+            "nostr",
+            True,
+            True,
+            {
+                "relays": "wss://relay.damus.io",
+                "nsec": test_nsec,
+            },
+        )
+
+        spooled = []
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+
+        # Mock format_event to return a valid formatted event without p tag
+        def format_no_p(raw):
+            fe = baseclass.FormattedEvent(dict(raw))
+            fe.payload = {"kind": 14, "content": "test", "tags": [["t", "monitoring"]]}
+            fe.summary = "test"
+            return fe
+
+        monkeypatch.setattr(forwarder, "format_event", format_no_p)
+
+        forwarder.forward({"HOSTNAME": "srv01"})
+
+        # Should have been spooled due to missing p tag
+        assert len(spooled) == 1
+
+
+class TestNostrHostOnlyEvent:
+    def test_host_only_event_uses_service_dash(self, setup):
+        """Host-only event uses 'Service: -' in body."""
+        formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+        formatter = formatter_module.NostrFormatter()
+        event = baseclass.FormattedEvent(
+            {
+                "HOSTNAME": "myhost",
+            }
+        )
+
+        formatter.format_event(event)
+
+        assert "Service: -\n" in event.payload["content"]
+        assert "Host: myhost" in event.payload["content"]
+        assert event.summary == "myhost/-: -"
+
+    def test_host_only_event_tags_only_host_and_state(self, setup):
+        """Host-only event tags include host and state only (no service)."""
+        formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+        formatter = formatter_module.NostrFormatter()
+        event = baseclass.FormattedEvent(
+            {
+                "HOSTNAME": "myhost",
+                "HOSTSTATE": "UP",
+            }
+        )
+
+        formatter.format_event(event)
+
+        tag_strings = [t[1] for t in event.payload["tags"] if t[0] == "t"]
+        assert "host=myhost" in tag_strings
+        assert any("state=" in t for t in tag_strings)
+        assert not any("service=" in t for t in tag_strings)
+
+
+class TestNostrFieldAliases:
+    def test_host_alias(self, setup):
+        """HOST alias produces same result as HOSTNAME."""
+        formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+        formatter = formatter_module.NostrFormatter()
+
+        event_host = baseclass.FormattedEvent({"HOST": "alias_host"})
+        formatter.format_event(event_host)
+
+        event_hostname = baseclass.FormattedEvent({"HOSTNAME": "alias_host"})
+        formatter.format_event(event_hostname)
+
+        assert event_host.payload["content"] == event_hostname.payload["content"]
+        assert event_host.summary == event_hostname.summary
+
+    def test_service_alias(self, setup):
+        """SERVICE alias produces same result as SERVICEDESC."""
+        formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+        formatter = formatter_module.NostrFormatter()
+
+        event_svc = baseclass.FormattedEvent({"HOSTNAME": "h", "SERVICE": "myservice"})
+        formatter.format_event(event_svc)
+
+        event_desc = baseclass.FormattedEvent({"HOSTNAME": "h", "SERVICEDESC": "myservice"})
+        formatter.format_event(event_desc)
+
+        assert event_svc.payload["content"] == event_desc.payload["content"]
+
+    def test_state_alias(self, setup):
+        """STATE alias produces same result as SERVICESTATE."""
+        formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+        formatter = formatter_module.NostrFormatter()
+
+        event_state = baseclass.FormattedEvent({"HOSTNAME": "h", "STATE": "WARNING"})
+        formatter.format_event(event_state)
+
+        event_svcstate = baseclass.FormattedEvent({"HOSTNAME": "h", "SERVICESTATE": "WARNING"})
+        formatter.format_event(event_svcstate)
+
+        assert event_state.payload["content"] == event_svcstate.payload["content"]
+
+    def test_output_alias(self, setup):
+        """OUTPUT alias produces same result as SERVICEOUTPUT."""
+        formatter_module = importlib.import_module("notificationforwarder.nostr.formatter")
+        formatter = formatter_module.NostrFormatter()
+
+        event_out = baseclass.FormattedEvent({"HOSTNAME": "h", "OUTPUT": "test output"})
+        formatter.format_event(event_out)
+
+        event_svcout = baseclass.FormattedEvent({"HOSTNAME": "h", "SERVICEOUTPUT": "test output"})
+        formatter.format_event(event_svcout)
+
+        assert event_out.payload["content"] == event_svcout.payload["content"]
+
+
+class TestNostrNpubNormalization:
+    def test_npub1_normalized_to_hex_via_sdk(self, setup, monkeypatch):
+        """npub1... in p tag is accepted by the SDK's PublicKey.parse()."""
+        test_nsec, test_npub = _generated_keypair()
+
+        # Verify that the SDK can parse the npub format
+        from nostr_sdk import PublicKey
+        parsed = PublicKey.parse(test_npub)
+        assert parsed is not None
+
+    def test_npub_in_p_tag_works_for_submit(self, setup, monkeypatch):
+        """npub1 format in p tag works for submit."""
+        nostr_forwarder_module = _nostr_forwarder_module()
+        test_nsec, test_npub = _generated_keypair()
+
+        captured = {}
+
+        class FakeClient:
+            def __init__(self, signer):
+                pass
+
+            async def add_relay(self, relay_url):
+                return True
+
+            async def connect(self):
+                return True
+
+            async def send_private_msg_to(self, urls, receiver, message, tags):
+                captured["receiver"] = receiver.to_bech32()
+                return True
+
+        monkeypatch.setattr(nostr_forwarder_module, "Client", FakeClient)
+
+        forwarder = baseclass.new(
+            "nostr",
+            None,
+            "nostr",
+            True,
+            True,
+            {
+                "relays": "wss://relay.damus.io",
+                "nsec": test_nsec,
+                "tags": f'[["p", "{test_npub}"]]',
+            },
+        )
+
+        event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
+        event.payload = {"kind": 14, "content": "test", "tags": []}
+        event.summary = "test"
+
+        assert forwarder.submit(event) is True
+        assert captured["receiver"] == test_npub
+
+
+class TestNostrNsecNotInLogs:
+    def test_nsec_not_in_logs_on_success(self, setup, monkeypatch):
+        """nsec never appears in log files on success path."""
+        nostr_forwarder_module = _nostr_forwarder_module()
+        test_nsec, test_npub = _generated_keypair()
+
+        class FakeClient:
+            def __init__(self, signer):
+                pass
+
+            async def add_relay(self, relay_url):
+                return True
+
+            async def connect(self):
+                return True
+
+            async def send_private_msg_to(self, urls, receiver, message, tags):
+                return True
+
+        monkeypatch.setattr(nostr_forwarder_module, "Client", FakeClient)
+
+        forwarder = baseclass.new(
+            "nostr",
+            None,
+            "nostr",
+            True,
+            True,
+            {
+                "relays": "wss://relay.damus.io",
+                "nsec": test_nsec,
+                "tags": f'[["p", "{test_npub}"]]',
+            },
+        )
+
+        event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
+        event.payload = {"kind": 14, "content": "test", "tags": []}
+        event.summary = "test"
+
+        assert forwarder.submit(event) is True
+
+        log_content = open(get_logfile(forwarder)).read()
+        assert test_nsec not in log_content
+
+    def test_nsec_not_in_logs_on_failure(self, setup, monkeypatch):
+        """nsec never appears in log files on failure path."""
+        nostr_forwarder_module = _nostr_forwarder_module()
+        test_nsec, test_npub = _generated_keypair()
+
+        class BrokenClient:
+            def __init__(self, signer):
+                pass
+
+            async def add_relay(self, relay_url):
+                return True
+
+            async def connect(self):
+                return True
+
+            async def send_private_msg_to(self, urls, receiver, message, tags):
+                raise RuntimeError("relay down")
+
+        monkeypatch.setattr(nostr_forwarder_module, "Client", BrokenClient)
+
+        forwarder = baseclass.new(
+            "nostr",
+            None,
+            "nostr",
+            True,
+            True,
+            {
+                "relays": "wss://relay.damus.io",
+                "nsec": test_nsec,
+                "tags": f'[["p", "{test_npub}"]]',
+            },
+        )
+
+        event = baseclass.FormattedEvent({"HOSTNAME": "srv01"})
+        event.payload = {"kind": 14, "content": "test", "tags": []}
+        event.summary = "test"
+
+        assert forwarder.submit(event) is False
+
+        log_content = open(get_logfile(forwarder)).read()
+        assert test_nsec not in log_content
+
+
+class TestNostrRelayFailureSpools:
+    def test_relay_publish_failure_spools_event(self, setup, monkeypatch):
+        """Relay publish failure via forward() spools the event."""
+        nostr_forwarder_module = _nostr_forwarder_module()
+        test_nsec, test_npub = _generated_keypair()
+
+        class BrokenClient:
+            def __init__(self, signer):
+                pass
+
+            async def add_relay(self, relay_url):
+                return True
+
+            async def connect(self):
+                return True
+
+            async def send_private_msg_to(self, urls, receiver, message, tags):
+                raise RuntimeError("relay down")
+
+        monkeypatch.setattr(nostr_forwarder_module, "Client", BrokenClient)
+
+        forwarder = baseclass.new(
+            "nostr",
+            None,
+            "nostr",
+            True,
+            True,
+            {
+                "relays": "wss://relay.damus.io",
+                "nsec": test_nsec,
+                "tags": f'[["p", "{test_npub}"]]',
+            },
+        )
+
+        spooled = []
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+
+        # Mock format_event to return a valid formatted event
+        def format_ok(raw):
+            fe = baseclass.FormattedEvent(dict(raw))
+            fe.payload = {"kind": 14, "content": "test", "tags": [["p", test_npub]]}
+            fe.summary = "test"
+            return fe
+
+        monkeypatch.setattr(forwarder, "format_event", format_ok)
+
+        forwarder.forward({"HOSTNAME": "srv01"})
+
+        # Event should be spooled
+        assert len(spooled) == 1
+        assert spooled[0]["HOSTNAME"] == "srv01"

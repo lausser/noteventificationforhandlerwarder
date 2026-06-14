@@ -1,12 +1,15 @@
+import logging
 import requests
 import urllib.parse
 from notificationforwarder.baseclass import NotificationForwarder, timeout
+
+logger = logging.getLogger("notificationforwarder.telegram")
 
 class TelegramForwarder(NotificationForwarder):
     def __init__(self, opts):
         super(self.__class__, self).__init__(opts)
         setattr(self, "bot_token", getattr(self, "bot_token", None))
-        setattr(self, "chat_id", getattr(self, "hat_id", None))
+        setattr(self, "chat_id", getattr(self, "chat_id", None))
 
     @timeout(30)
     def submit(self, event):
@@ -33,7 +36,7 @@ class TelegramForwarder(NotificationForwarder):
             request_params["text"] = urllib.parse.quote(event.payload)
             request_params["parse_mode"] = "MarkdownV2"
             request_params["chat_id"] = self.chat_id
-            response = requests.get("https://api.telegram.org/bot{}/sendMessage".format(self.bot_token), params=request_parms)
+            response = requests.get("https://api.telegram.org/bot{}/sendMessage".format(self.bot_token), params=request_params)
             if response.status_code == requests.codes.ok:
                 logger.info("success: {} result is {}, request was {}".format(event.summary, response.text, request_params))
                 return True

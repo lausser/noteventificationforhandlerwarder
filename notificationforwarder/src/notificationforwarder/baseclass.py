@@ -415,6 +415,7 @@ class NotificationForwarder(object):
         with open(self.db_lock_file, "w") as lock_file:
             locked = self.acquire_lock_with_retry(lock_file)
             if locked:
+                self.baseclass_logs_summary = True
                 try:
                     dropped = self.spool_store.prune_expired(self.max_spool_minutes)
                     replay_attempted = 0
@@ -449,7 +450,14 @@ class NotificationForwarder(object):
                             for id, text in id_events:
                                 raw_event = self.spool_store.decode(text)
                                 formatted_event = self.format_event(raw_event)
-                                if formatted_event:
+                                if formatted_event and formatted_event.is_discarded:
+                                    deleted_trash += 1
+                                    logger.info("discard spooled event during replay", {
+                                        'event_id': id,
+                                        'action': 'discard_during_replay'
+                                    })
+                                    self.spool_store.delete(id)
+                                elif formatted_event:
                                     replay_attempted += 1
                                     try:
                                         result = self.submit(formatted_event)

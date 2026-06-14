@@ -141,7 +141,7 @@ def timeout(seconds, error_message="Timeout"):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            result = [ForwarderTimeoutError(error_message)]
+            result = [RunnerTimeoutError(error_message)]
             def target():
                 try:
                     result[0] = func(*args, **kwargs)
@@ -153,7 +153,7 @@ def timeout(seconds, error_message="Timeout"):
             thread.start()
             thread.join(seconds)
             if thread.is_alive():
-                raise ForwarderTimeoutError(error_message)
+                raise RunnerTimeoutError(error_message)
             if isinstance(result[0], Exception):
                 raise result[0]
             return result[0]
@@ -377,6 +377,7 @@ class DecidedEvent(metaclass=ABCMeta):
         self._runneropts = {}
         self._discarded = False
         self._discarded_silently = True
+        self._is_heartbeat = False
 
     @property
     def eventopts(self):

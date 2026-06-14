@@ -3,6 +3,8 @@ import socket
 import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
+logger = logging.getLogger("notificationforwarder.syslog")
+
 
 class SyslogForwarder(NotificationForwarder):
     def __init__(self, opts):
