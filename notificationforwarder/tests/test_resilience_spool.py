@@ -841,13 +841,8 @@ class TestSpoolStore:
         verify.close()
 
     def test_concurrent_enqueue_shared_instance(self, setup):
-        """Concurrent enqueue on a single shared SpoolStore instance is not safe.
-
-        SQLite with a shared connection and check_same_thread=False does not
-        support concurrent cursor operations from different threads. The real
-        forwarder avoids this by using a file lock (fcntl) to ensure only one
-        thread accesses the store at a time. This test documents that limitation.
-        """
+        """Concurrent enqueue on a single shared SpoolStore instance is serialized
+        by an internal lock, so all writes land exactly once."""
         import threading
 
         db_path = os.path.join(OMD_ROOT, "tmp", "test_spool_shared.db")
@@ -871,13 +866,6 @@ class TestSpoolStore:
         t1.join()
         t2.join()
 
-        # SQLite raises ProgrammingError for recursive cursor use across
-        # threads. This is expected — the real forwarder uses a file lock to
-        # ensure only one thread accesses the store at a time.
-        if errors:
-            assert all("Recursive use of cursors" in str(e) for e in errors)
-        else:
-            # If no error, the concurrent access happened to work (timing-dependent)
-            assert store.count() == 20
-
+        assert errors == []
+        assert store.count() == 20
         store.close()

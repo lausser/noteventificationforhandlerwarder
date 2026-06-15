@@ -4,6 +4,7 @@ except ImportError:
     import json
 import random
 import sqlite3
+import threading
 import time
 import fcntl
 
@@ -14,6 +15,7 @@ class SpoolStore:
         self.table_name = table_name
         self.connection = None
         self.cursor = None
+        self._lock = threading.Lock()
 
     def open(self):
         self.connection = sqlite3.connect(self.db_file, check_same_thread=False)
@@ -25,45 +27,53 @@ class SpoolStore:
                 payload TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             )"""
-        self.cursor.execute(sql_create)
-        self.connection.commit()
+        with self._lock:
+            self.cursor.execute(sql_create)
+            self.connection.commit()
 
     def count(self):
-        self.cursor.execute("SELECT COUNT(*) FROM " + self.table_name)
-        return self.cursor.fetchone()[0]
+        with self._lock:
+            self.cursor.execute("SELECT COUNT(*) FROM " + self.table_name)
+            return self.cursor.fetchone()[0]
 
     def enqueue(self, raw_event):
         sql_insert = "INSERT INTO " + self.table_name + "(payload) VALUES (?)"
-        self.cursor.execute(sql_insert, (json.dumps(raw_event),))
-        self.connection.commit()
+        with self._lock:
+            self.cursor.execute(sql_insert, (json.dumps(raw_event),))
+            self.connection.commit()
 
     def prune_expired(self, max_spool_minutes):
         outdated = int(time.time() - 60 * max_spool_minutes)
         sql_delete = "DELETE FROM " + self.table_name + " WHERE CAST(STRFTIME('%s', timestamp) AS INTEGER) < ?"
-        self.cursor.execute(sql_delete, (outdated,))
-        return self.cursor.rowcount
+        with self._lock:
+            self.cursor.execute(sql_delete, (outdated,))
+            return self.cursor.rowcount
 
     def fetch_batch(self, limit=10):
         sql_select = "SELECT id, payload FROM " + self.table_name + " ORDER BY id LIMIT ?"
-        self.cursor.execute(sql_select, (limit,))
-        return self.cursor.fetchall()
+        with self._lock:
+            self.cursor.execute(sql_select, (limit,))
+            return self.cursor.fetchall()
 
     def delete(self, event_id):
-        self.cursor.execute("DELETE FROM " + self.table_name + " WHERE id = ?", (event_id,))
-        self.connection.commit()
+        with self._lock:
+            self.cursor.execute("DELETE FROM " + self.table_name + " WHERE id = ?", (event_id,))
+            self.connection.commit()
 
     def decode(self, text):
         return json.loads(text)
 
     def commit(self):
-        self.connection.commit()
+        with self._lock:
+            self.connection.commit()
 
     def close(self):
-        if self.cursor:
-            self.cursor.close()
-        if self.connection:
-            self.connection.commit()
-            self.connection.close()
+        with self._lock:
+            if self.cursor:
+                self.cursor.close()
+            if self.connection:
+                self.connection.commit()
+                self.connection.close()
 
 
 def acquire_lock_with_retry(lock_file, app_logger, max_attempts=3, base_delay=0.1):
