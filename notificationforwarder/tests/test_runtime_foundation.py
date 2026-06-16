@@ -77,6 +77,23 @@ def test_runtime_config_normalizes_forwarder_options(runtime_setup):
     del os.environ["NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES"]
 
 
+def test_env_var_max_spool_minutes_used_as_fallback(runtime_setup):
+    os.environ["NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES"] = "15"
+
+    config = RuntimeConfig.from_inputs(
+        "example",
+        None,
+        "example",
+        verbose=False,
+        debug=False,
+        forwarder_opts={},
+    )
+
+    assert config.max_spool_minutes == 15
+
+    del os.environ["NOTIFICATIONFORWARDER_MAX_SPOOL_MINUTES"]
+
+
 def test_resolve_component_supports_derived_and_explicit_names():
     assert resolve_component("json", "Logger") == ("json", "JsonLogger", "derived-class")
     assert resolve_component("custom.module.LoggerClass", "Logger") == (
