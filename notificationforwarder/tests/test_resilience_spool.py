@@ -98,6 +98,41 @@ class TestHeartbeatSpoolPolicy:
         # Heartbeat events should not be spooled
         assert len(spooled) == 0
 
+    def test_heartbeat_alternating_success_and_failure_does_not_grow_queue(self, setup, monkeypatch):
+        """Heartbeat events must not increase the spool queue, even when delivery fails."""
+        forwarder = _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+        )
+
+        results = iter([True, False, True, False])
+        monkeypatch.setattr(forwarder, "submit", lambda fe: next(results))
+
+        def make_heartbeat_event(seq):
+            event = _formatted_event({"description": f"heartbeat {seq}"})
+            event.is_heartbeat = True
+            event.payload = {"seq": seq}
+            event.summary = f"heartbeat {seq}"
+            return event
+
+        events = [
+            {"description": "heartbeat 1"},
+            {"description": "heartbeat 2"},
+            {"description": "heartbeat 3"},
+            {"description": "heartbeat 4"},
+        ]
+
+        monkeypatch.setattr(
+            forwarder,
+            "format_event",
+            lambda raw: make_heartbeat_event(raw["description"]),
+        )
+
+        for event in events:
+            forwarder.forward(event)
+            assert forwarder.num_spooled_events() == 0
+
     def test_webhook_non_heartbeat_failure_spools(self, setup, monkeypatch):
         """Non-heartbeat events are spooled on failure."""
         forwarder = _new_forwarder(
