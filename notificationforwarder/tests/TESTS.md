@@ -170,6 +170,7 @@ Integration tests for `load_forwarder()` using the `pythonpath/lib/python` test 
 | `test_persistent_failure_keeps_row_and_terminates` | `submit()` always returning `False` → event stays in spool, stuck detection fires | Persistent failures are not silently dropped; the system logs and stops retrying. |
 | `test_spool_init_failure_returns_false` | `SpoolStore.enqueue` raising `sqlite3.OperationalError` → returns `False` with "database error" log | Database errors are caught and logged, not raised. |
 | `test_flush_beyond_batch_limit_stuck_detection` | 12 spooled events (exceeds batch limit of 10) with all submits failing → stuck detection, all events stay | The stuck detection logic handles batch boundaries correctly. |
+| `test_flush_terminates_while_other_processes_spool` | All submits fail while a second connection spools a new event after each submit → flush stops after the first batch, events 0–9 submitted once each, all 22 rows kept, stuck log reports `spooled_count` 12 (snapshot rows, not the live queue) | A flush is bounded to the rows present at its start; concurrent spooling cannot keep it (and the flush lock) alive. |
 | `test_formatter_returns_none_during_replay_deletes_trash` | `format_event` returning `None` during replay → event deleted as trash | Un-formattable events are cleaned up, not retried forever. |
 | `test_summary_logging_resumes_after_flush` | `baseclass_logs_summary` is reset to `True` at flush start | The no_more_logging flag is reset so operators see summary logs after recovery. |
 
@@ -186,6 +187,7 @@ Low-level `SpoolStore` operations against a real SQLite database.
 | `test_fetch_batch_limit_zero` | `fetch_batch(limit=0)` returns `[]` | Zero limit is handled. |
 | `test_fetch_batch_limit_exceeds_total` | Limit exceeding total returns all rows | No error when limit is too high. |
 | `test_prune_expired_boundary` | `prune_expired(5)` deletes only events strictly older than 5 minutes | Boundary conditions are correct. |
+| `test_prune_expired_does_not_hold_write_lock` | After `prune_expired()`, a second connection with a 0.1 s busy timeout can insert; `count(max_id=1)` counts only rows up to that id | Pruning commits immediately, so other processes can spool while a flush replays. |
 | `test_enqueue_non_serializable_data` | Enqueuing a `set` raises `TypeError` | Non-JSON-serializable data is rejected. |
 | `test_decode_round_trip` | JSON encode → decode produces the original dict | Serialization preserves data. |
 | `test_concurrent_enqueue` | Two threads each enqueuing 10 events concurrently → 20 rows, no corruption | Thread safety of concurrent writes. |

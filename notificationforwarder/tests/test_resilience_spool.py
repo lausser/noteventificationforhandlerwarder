@@ -597,11 +597,79 @@ class TestSpoolReplayEdges:
         # All 12 events should still be in spool (all failed)
         assert forwarder.num_spooled_events() == 12
 
-        # Stuck detection should have triggered after 2 iterations (10 fetched, then 2 remaining = unchanged)
+        # Stuck detection should have triggered after the first batch (10 fetched, none replayed)
         assert any("could not be submitted" in str(c) for c in critical_calls)
 
         # spool replay summary should be logged
         assert any("spool replay summary" in str(c) for c in info_calls)
+
+    def test_flush_terminates_while_other_processes_spool(self, setup, monkeypatch):
+        """Flush must not loop forever when concurrent processes keep spooling.
+
+        Regression: stuck detection compared the total spool count, which
+        other processes change by spooling, so the same failing head batch
+        was retried endlessly while the flush lock was held.
+        """
+        forwarder = _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+        )
+        for i in range(12):
+            forwarder.spool_store.enqueue({"HOSTNAME": "h1", "event_num": i})
+
+        # a second connection plays a concurrent notificationforwarder process
+        other_process = SpoolStore(forwarder.db_file, forwarder.table_name)
+        other_process.open()
+
+        def format_ok(raw):
+            fe = _formatted_event(raw)
+            fe.payload = {"data": "test"}
+            fe.summary = "test"
+            return fe
+
+        submitted = []
+
+        def fail_while_others_spool(formatted_event):
+            submitted.append(formatted_event.eventopts["event_num"])
+            other_process.enqueue({"HOSTNAME": "h1", "event_num": 1000 + len(submitted)})
+            if len(submitted) > 100:
+                raise SystemExit("flush does not terminate")
+            return False
+
+        monkeypatch.setattr(forwarder, "format_event", format_ok)
+        monkeypatch.setattr(forwarder, "submit", fail_while_others_spool)
+
+        critical_calls = []
+        original_logger = baseclass.logger
+
+        class MockLogger:
+            def critical(self, msg, context=None, *args, **kwargs):
+                critical_calls.append((msg, context))
+
+            def info(self, msg, *args, **kwargs):
+                pass
+
+            def warning(self, msg, *args, **kwargs):
+                pass
+
+            def debug(self, msg, *args, **kwargs):
+                pass
+
+        baseclass.logger = MockLogger()
+        try:
+            forwarder.flush()
+        finally:
+            baseclass.logger = original_logger
+            other_process.close()
+
+        # one batch failed completely -> stop, every event tried at most once
+        assert submitted == list(range(10))
+        # nothing lost: 12 original + 10 spooled concurrently
+        assert forwarder.num_spooled_events() == 22
+        # the stuck log counts only the rows of this flush's snapshot
+        stuck = [ctx for msg, ctx in critical_calls if msg == "spooled events could not be submitted"]
+        assert stuck == [{'spooled_count': 12, 'action': 'could_not_submit'}]
 
     def test_formatter_returns_none_during_replay_deletes_trash(self, setup, monkeypatch):
         """Formatter returning None during replay deletes event as trash."""
@@ -806,6 +874,31 @@ class TestSpoolStore:
         assert dropped == 1
         assert store.count() == 1  # keep_id should remain
 
+        store.close()
+
+    def test_prune_expired_does_not_hold_write_lock(self, setup):
+        """After prune_expired another process must be able to spool.
+
+        Regression: the DELETE was not committed, so the implicit transaction
+        kept the database write-locked during the whole flush.
+        """
+        db_path = os.path.join(OMD_ROOT, "tmp", "test_spool_prune_lock.db")
+        store = SpoolStore(db_path, "test_events")
+        store.open()
+        store.init_db()
+        store.enqueue({"event": "keep"})
+
+        store.prune_expired(5)
+
+        other_process = sqlite3.connect(db_path, timeout=0.1)
+        try:
+            other_process.execute("INSERT INTO test_events(payload) VALUES (?)", ('{"event": "other"}',))
+            other_process.commit()
+        finally:
+            other_process.close()
+
+        assert store.count() == 2
+        assert store.count(max_id=1) == 1
         store.close()
 
     def test_enqueue_non_serializable_data(self, setup):

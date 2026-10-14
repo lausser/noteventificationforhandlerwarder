@@ -427,75 +427,82 @@ class NotificationForwarder(object):
                             'spooled_count': dropped,
                             'action': 'dropped'
                         })
-                    last_events_to_flush = 0
+                    # walk through the rows which existed when the flush started.
+                    # rows spooled meanwhile by concurrent processes are left for the
+                    # next flush and each row is tried at most once, so the flush lock
+                    # is not held forever while the destination keeps failing.
+                    last_id = 0
+                    snapshot_max_id = self.spool_store.max_id()
                     while True:
-                        events_to_flush = self.num_spooled_events()
-                        if events_to_flush:
-                            logger.info("spooled events to be re-sent", {
-                                'spooled_count': events_to_flush,
-                                'action': 'resend'
-                            })
-                        else:
+                        id_events = self.spool_store.fetch_batch(after_id=last_id, max_id=snapshot_max_id)
+                        if not id_events:
                             logger.debug("nothing left to flush", {})
                             break
-                        if last_events_to_flush == events_to_flush:
-                            if events_to_flush != 0:
-                                logger.critical("spooled events could not be submitted", {
-                                    'spooled_count': last_events_to_flush,
-                                    'action': 'could_not_submit'
+                        logger.info("spooled events to be re-sent", {
+                            'spooled_count': len(id_events),
+                            'action': 'resend'
+                        })
+                        progress = False
+                        for id, text in id_events:
+                            last_id = id
+                            raw_event = self.spool_store.decode(text)
+                            formatted_event = self.format_event(raw_event)
+                            if formatted_event and formatted_event.is_discarded:
+                                deleted_trash += 1
+                                logger.info("discard spooled event during replay", {
+                                    'event_id': id,
+                                    'action': 'discard_during_replay'
                                 })
-                            break
-                        else:
-                            id_events = self.spool_store.fetch_batch()
-                            for id, text in id_events:
-                                raw_event = self.spool_store.decode(text)
-                                formatted_event = self.format_event(raw_event)
-                                if formatted_event and formatted_event.is_discarded:
-                                    deleted_trash += 1
-                                    logger.info("discard spooled event during replay", {
-                                        'event_id': id,
-                                        'action': 'discard_during_replay'
-                                    })
+                                self.spool_store.delete(id)
+                                progress = True
+                            elif formatted_event:
+                                replay_attempted += 1
+                                try:
+                                    result = self.submit(formatted_event)
+                                    success, _report_payload, error_message = apply_forward_result(result)
+                                except Exception as e:
+                                    success = False
+                                    error_message = str(e)
+                                if success:
                                     self.spool_store.delete(id)
-                                elif formatted_event:
-                                    replay_attempted += 1
-                                    try:
-                                        result = self.submit(formatted_event)
-                                        success, _report_payload, error_message = apply_forward_result(result)
-                                    except Exception as e:
-                                        success = False
-                                        error_message = str(e)
-                                    if success:
-                                        self.spool_store.delete(id)
-                                        replayed += 1
-                                        logger.info("delete spooled event", {
-                                            'spooled_count': 1,
-                                            'event_id': id,
-                                            'action': 'delete'
-                                        })
-                                    else:
-                                        stayed_in_spool += 1
-                                        context = {
-                                            'event_id': id,
-                                            'action': 'stays_in_spool'
-                                        }
-                                        if error_message:
-                                            context['exception'] = error_message
-                                        logger.critical("event stays in spool", context)
-                                else:
-                                    deleted_trash += 1
-                                    logger.critical("could not format spooled event", {
-                                        'raw_event': raw_event,
-                                        'event_id': id,
+                                    progress = True
+                                    replayed += 1
+                                    logger.info("delete spooled event", {
                                         'spooled_count': 1,
-                                        'action': 'could_not_format'
-                                    })
-                                    self.spool_store.delete(id)
-                                    logger.info("delete trash event", {
                                         'event_id': id,
-                                        'action': 'delete_trash'
+                                        'action': 'delete'
                                     })
-                            last_events_to_flush = events_to_flush
+                                else:
+                                    stayed_in_spool += 1
+                                    context = {
+                                        'event_id': id,
+                                        'action': 'stays_in_spool'
+                                    }
+                                    if error_message:
+                                        context['exception'] = error_message
+                                    logger.critical("event stays in spool", context)
+                            else:
+                                deleted_trash += 1
+                                logger.critical("could not format spooled event", {
+                                    'raw_event': raw_event,
+                                    'event_id': id,
+                                    'spooled_count': 1,
+                                    'action': 'could_not_format'
+                                })
+                                self.spool_store.delete(id)
+                                progress = True
+                                logger.info("delete trash event", {
+                                    'event_id': id,
+                                    'action': 'delete_trash'
+                                })
+                        if not progress:
+                            # only the rows this flush was responsible for, not
+                            # the ones spooled concurrently after the snapshot
+                            logger.critical("spooled events could not be submitted", {
+                                'spooled_count': self.spool_store.count(max_id=snapshot_max_id),
+                                'action': 'could_not_submit'
+                            })
+                            break
                     logger.info("spool replay summary", {
                         'attempted': replay_attempted,
                         'recovered_count': replayed,

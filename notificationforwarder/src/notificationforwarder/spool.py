@@ -31,9 +31,14 @@ class SpoolStore:
             self.cursor.execute(sql_create)
             self.connection.commit()
 
-    def count(self):
+    def count(self, max_id=None):
+        sql_count = "SELECT COUNT(*) FROM " + self.table_name
+        params = []
+        if max_id is not None:
+            sql_count += " WHERE id <= ?"
+            params.append(max_id)
         with self._lock:
-            self.cursor.execute("SELECT COUNT(*) FROM " + self.table_name)
+            self.cursor.execute(sql_count, params)
             return self.cursor.fetchone()[0]
 
     def enqueue(self, raw_event):
@@ -47,12 +52,27 @@ class SpoolStore:
         sql_delete = "DELETE FROM " + self.table_name + " WHERE CAST(STRFTIME('%s', timestamp) AS INTEGER) < ?"
         with self._lock:
             self.cursor.execute(sql_delete, (outdated,))
-            return self.cursor.rowcount
+            dropped = self.cursor.rowcount
+            # commit immediately, otherwise the implicit transaction keeps
+            # the database write-locked for other processes during a flush
+            self.connection.commit()
+            return dropped
 
-    def fetch_batch(self, limit=10):
-        sql_select = "SELECT id, payload FROM " + self.table_name + " ORDER BY id LIMIT ?"
+    def max_id(self):
         with self._lock:
-            self.cursor.execute(sql_select, (limit,))
+            self.cursor.execute("SELECT MAX(id) FROM " + self.table_name)
+            return self.cursor.fetchone()[0] or 0
+
+    def fetch_batch(self, limit=10, after_id=0, max_id=None):
+        sql_select = "SELECT id, payload FROM " + self.table_name + " WHERE id > ?"
+        params = [after_id]
+        if max_id is not None:
+            sql_select += " AND id <= ?"
+            params.append(max_id)
+        sql_select += " ORDER BY id LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            self.cursor.execute(sql_select, params)
             return self.cursor.fetchall()
 
     def delete(self, event_id):
