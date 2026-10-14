@@ -87,3 +87,11 @@ The Nostr forwarder MUST support publishing encrypted direct messages using eith
 - **WHEN** the Nostr formatter processes an event
 - **THEN** it MUST produce a payload with content and tags without hardcoding protocol-specific event kind
 - **AND** the forwarder MUST determine the final protocol based on configuration
+
+### Requirement: Nostr documentation in INDEX.md
+The INDEX.md file on omd.consol.de SHALL include the Nostr forwarder/formatter documentation section, matching the content already present in README.md.
+
+#### Scenario: User finds Nostr docs on omd.consol.de
+- **WHEN** a user visits the notificationforwarder page on omd.consol.de
+- **THEN** the documentation SHALL include the Nostr section with installation instructions, parameter table, and usage example
+- **AND** the content SHALL be identical to the Nostr section in README.md
