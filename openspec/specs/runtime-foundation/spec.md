@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Define the core runtime contract of notificationforwarder: component loading, lifecycle management, environment/path initialization, logger selection, and the event forwarding flow, with explicit responsibilities instead of hidden side effects.
+
+## Requirements
 
 ### Requirement: Runtime orchestration has explicit responsibilities
 The system SHALL separate runtime orchestration responsibilities so that component loading, environment/path initialization, event formatting, delivery execution, reporting, and logging coordination are implemented as explicit runtime concerns rather than as hidden side effects spread across the forwarding flow.
