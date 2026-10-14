@@ -191,7 +191,8 @@ Low-level `SpoolStore` operations against a real SQLite database.
 | `test_enqueue_non_serializable_data` | Enqueuing a `set` raises `TypeError` | Non-JSON-serializable data is rejected. |
 | `test_decode_round_trip` | JSON encode → decode produces the original dict | Serialization preserves data. |
 | `test_concurrent_enqueue` | Two threads each enqueuing 10 events concurrently → 20 rows, no corruption | Thread safety of concurrent writes. |
-| `test_concurrent_enqueue_shared_instance` | Shared SpoolStore instance across threads documents SQLite cursor limitation | SQLite doesn't allow recursive cursor use; the real forwarder uses file locks. |
+| `test_concurrent_enqueue_shared_instance` | Two threads each enqueue 10 events on one shared SpoolStore instance → 20 rows, no errors | The per-instance thread lock serializes access to the shared cursor; without it the test fails or crashes the interpreter. |
+| `test_concurrent_mixed_operations_shared_instance` | One thread enqueues 200 events while another fetches (by `after_id`), counts and deletes every other row on the same instance → no errors, fetched rows in id order and never twice, every event either fetched or still spooled, `count()` = enqueued − deleted | Mixed operations on a shared instance stay consistent. SQLite reuses the id of a deleted last row, so the test does not assume ids grow monotonically. |
 
 ---
 
@@ -503,6 +504,7 @@ Smoke tests for every logging call path in `baseclass.py`. Each test calls a spe
 | `test_flush_replays_spooled_events_on_recovery` | New forwarder (no `fail`) triggers flush → spooled events replayed and deleted | Recovery path: flush + replay. |
 | `test_flush_drops_expired_spooled_events` | Spooled events older than `max_spool_minutes` are dropped during flush | Expired events are cleaned up. |
 | `test_flush_logs_when_concurrent_lock_is_unavailable` | Flush lock not acquired → "concurrent flush suppressed" log | Concurrent flush prevention works. |
+| `test_flush_is_suppressed_while_another_process_holds_the_lock` | A child process holds the real fcntl flush lock → flush tries 3 times, logs "concurrent flush suppressed", spooled event stays; after the child releases the lock the next flush replays it | The cross-process flush lock and its retry work against a real competing process. |
 | `test_timeout_decorator_raises_forwarder_timeout` | `@timeout` decorator raises `ForwarderTimeoutError` on timeout | Timeout enforcement works. |
 | `test_timeout_decorator_preserves_underlying_exception` | Non-timeout exceptions propagate normally through `@timeout` | Timeout doesn't swallow other exceptions. |
 

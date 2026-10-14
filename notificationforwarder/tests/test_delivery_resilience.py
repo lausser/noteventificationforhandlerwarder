@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import subprocess
 import sys
 import time
 
@@ -129,6 +130,40 @@ def test_flush_logs_when_concurrent_lock_is_unavailable(resilience_setup, monkey
     log = open(get_logfile(forwarder)).read()
     assert "INFO - concurrent flush suppressed" in log
     assert "DEBUG - missed the flush lock" in log
+
+
+def test_flush_is_suppressed_while_another_process_holds_the_lock(resilience_setup):
+    forwarder = new_example_forwarder(fail="1")
+    forwarder.forward({"description": "spool me", "signature": "sig-locked"})
+    assert forwarder.num_spooled_events() == 1
+
+    # fcntl locks are per process, so the competing flush must be a real process
+    holder = subprocess.Popen(
+        [sys.executable, "-c",
+         "import fcntl, sys\n"
+         "f = open(sys.argv[1], 'w')\n"
+         "fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+         "print('locked', flush=True)\n"
+         "sys.stdin.read()\n",
+         forwarder.db_lock_file],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == "locked"
+        recovering_forwarder = new_example_forwarder()
+        recovering_forwarder.flush()
+        assert recovering_forwarder.num_spooled_events() == 1
+        log = open(get_logfile(recovering_forwarder)).read()
+        assert log.count("DEBUG - flush lock failed") == 3
+        assert "INFO - concurrent flush suppressed" in log
+    finally:
+        holder.stdin.close()
+        holder.wait(timeout=10)
+
+    # once the other process has released the lock, the next flush replays the event
+    recovering_forwarder.flush()
+    assert recovering_forwarder.num_spooled_events() == 0
+    signatures = [line.strip() for line in open(recovering_forwarder.signaturefile).readlines()]
+    assert signatures == ["sig-locked"]
 
 
 def test_timeout_decorator_raises_forwarder_timeout():

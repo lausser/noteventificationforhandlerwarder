@@ -997,3 +997,71 @@ class TestSpoolStore:
         assert errors == []
         assert store.count() == 20
         store.close()
+
+    def test_concurrent_mixed_operations_shared_instance(self, setup):
+        """One thread enqueues while another fetches, counts and deletes on the
+        same SpoolStore instance. Fetches see only fully stored rows in id order,
+        no row twice, and the final count matches enqueued minus deleted."""
+        import threading
+
+        db_path = os.path.join(OMD_ROOT, "tmp", "test_spool_shared_mixed.db")
+        store = SpoolStore(db_path, "test_events")
+        store.open()
+        store.init_db()
+
+        num_events = 200
+        errors = []
+        fetched = []
+        deleted = []
+        writer_done = threading.Event()
+
+        def writer():
+            try:
+                for i in range(num_events):
+                    store.enqueue({"seq": i})
+            except Exception as e:
+                errors.append(e)
+            finally:
+                writer_done.set()
+
+        def reader():
+            try:
+                last_id = 0
+                while True:
+                    finished = writer_done.is_set()
+                    batch = store.fetch_batch(limit=10, after_id=last_id)
+                    store.count()
+                    store.max_id()
+                    for event_id, text in batch:
+                        fetched.append((event_id, store.decode(text)["seq"]))
+                        last_id = event_id
+                        # delete every other row, keep the rest
+                        if event_id % 2 == 0:
+                            store.delete(event_id)
+                            deleted.append(event_id)
+                    if finished and not batch:
+                        break
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=writer), threading.Thread(target=reader)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+        assert not any(t.is_alive() for t in threads)
+
+        assert errors == []
+        ids = [event_id for event_id, _seq in fetched]
+        assert ids == sorted(set(ids))
+        # without AUTOINCREMENT sqlite reuses the id of a deleted last row, so
+        # an event can land behind the reader's after_id. It must then still
+        # be in the spool: every event was either fetched once or is kept.
+        fetched_seqs = [seq for _event_id, seq in fetched]
+        assert fetched_seqs == sorted(set(fetched_seqs))
+        remaining = [store.decode(text)["seq"] for _id, text in store.fetch_batch(limit=num_events)]
+        kept_seqs = [seq for event_id, seq in fetched if event_id not in deleted]
+        assert sorted(set(fetched_seqs) | set(remaining)) == list(range(num_events))
+        assert set(kept_seqs) <= set(remaining)
+        assert store.count() == num_events - len(deleted)
+        store.close()
