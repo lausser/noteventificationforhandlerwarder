@@ -506,6 +506,14 @@ If the receiver rejects a spooled event for good (for example because of an inva
 
 This means that in a busy monitoring environment where notifications flow regularly, spooled events get drained naturally — each new notification triggers a flush attempt on its way through.
 
+To monitor the size of the spool, use the line "spooling queue length". It is logged with the whole number of spooled events every time an event is spooled (level WARNING) and at the end of every flush (level INFO), so the value also goes down again while the spool drains. With the JSON logger, the number can be read with the regular expression `"message":"spooling queue length","queue_length":(\d+)`. The value is only logged when notificationforwarder runs, so it can be outdated when no notifications arrive. A check that does not depend on notifications can count the rows in the spool database directly:
+
+```
+sqlite3 $OMD_ROOT/var/tmp/notificationforwarder_<forwarder>_notifications.db "SELECT COUNT(*) FROM events_<forwarder>"
+```
+
+`<forwarder>` is the value of `--forwarder`, followed by `_` and the value of `--forwardertag` if one is set (for example `remedy_TEST`).
+
 ### Delivery Order
 
 Spooled events are stored and re-submitted in the order in which they failed. As long as every delivery succeeds, the receiver gets the events in the order in which they were created. After delivery failures, this is not guaranteed. A newer event can reach the receiver before an older one, for example a RECOVERY before its PROBLEM:

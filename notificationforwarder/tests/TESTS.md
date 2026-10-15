@@ -193,6 +193,16 @@ Spooled events 0, 1, 2 (ids 1, 2, 3) are replayed through a mocked `submit()`; t
 | `test_no_move_when_event_is_already_last` | The rejected event is the only one → stays with id 1, no move log | Moving the last event would change nothing. |
 | `test_moved_event_still_expires` | Event 0 spooled 4 minutes ago is moved, then `prune_expired(3)` drops it | Retention is measured from the original spool time. |
 
+### class TestQueueLengthAfterFlush
+
+| Test | What it verifies | Intention |
+|------|------------------|-----------|
+| `test_queue_length_zero_after_drain` | A flush that delivers all three spooled events logs info "spooling queue length" with `queue_length` 0 | A monitored queue length goes back down once the spool drained. |
+| `test_queue_length_after_stopped_flush` | A flush that stops at the first failure logs `queue_length` 3 | The value is the remaining spool, also after a stopped flush. |
+| `test_queue_length_includes_concurrently_spooled_events` | Another connection spools an event while the flush delivers all three → `queue_length` 1 | The value is the whole spool, not only the flush's snapshot. |
+| `test_queue_length_not_logged_without_lock` | Flush lock not acquired → no "spooling queue length" line | Only a flush that ran reports a value. |
+| `test_queue_length_json_format` | With the JSON logger, the regex `"message":"spooling queue length","queue_length":(\d+)` reads 0 after the drain | The documented monitoring regex works on real log output. |
+
 ### class TestSpoolStore
 
 Low-level `SpoolStore` operations against a real SQLite database.

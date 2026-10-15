@@ -1001,6 +1001,72 @@ class TestFlushStopAndMoveToEnd:
         assert self._spooled(forwarder) == [1, 2]
 
 
+class TestQueueLengthAfterFlush:
+    """Every flush logs the remaining spool size as "spooling queue length"."""
+
+    def _forwarder(self, monkeypatch, submit, num_spooled=3, logger_type="text"):
+        forwarder = _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+            logger_type=logger_type,
+        )
+        for i in range(num_spooled):
+            forwarder.spool_store.enqueue({"HOSTNAME": "h1", "event_num": i})
+
+        def format_ok(raw):
+            fe = _formatted_event(raw)
+            fe.payload = {"data": "test"}
+            fe.summary = "test"
+            return fe
+
+        monkeypatch.setattr(forwarder, "format_event", format_ok)
+        monkeypatch.setattr(forwarder, "submit", submit)
+        return forwarder
+
+    def _queue_lengths(self, monkeypatch, forwarder):
+        log = _RecordingLogger()
+        monkeypatch.setattr(baseclass, "logger", log)
+        forwarder.flush()
+        return [(lvl, ctx) for lvl, msg, ctx in log.calls if msg == "spooling queue length"]
+
+    def test_queue_length_zero_after_drain(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, lambda formatted_event: True)
+        assert self._queue_lengths(monkeypatch, forwarder) == [("info", {'queue_length': 0})]
+
+    def test_queue_length_after_stopped_flush(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, lambda formatted_event: False)
+        assert self._queue_lengths(monkeypatch, forwarder) == [("info", {'queue_length': 3})]
+
+    def test_queue_length_includes_concurrently_spooled_events(self, setup, monkeypatch):
+        def succeed_while_another_process_spools(formatted_event):
+            if formatted_event.eventopts["event_num"] == 0:
+                other_process = SpoolStore(forwarder.db_file, forwarder.table_name)
+                other_process.open()
+                other_process.enqueue({"HOSTNAME": "h1", "event_num": 100})
+                other_process.close()
+            return True
+
+        forwarder = self._forwarder(monkeypatch, succeed_while_another_process_spools)
+        assert self._queue_lengths(monkeypatch, forwarder) == [("info", {'queue_length': 1})]
+
+    def test_queue_length_not_logged_without_lock(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, lambda formatted_event: True)
+        monkeypatch.setattr(forwarder, "acquire_lock_with_retry",
+                            lambda lock_file, max_attempts=3, base_delay=0.1: False)
+        assert self._queue_lengths(monkeypatch, forwarder) == []
+
+    def test_queue_length_json_format(self, setup, monkeypatch):
+        """The monitoring regex from the docs reads 0 after the spool drained."""
+        import re
+        forwarder = self._forwarder(monkeypatch, lambda formatted_event: True, logger_type="json")
+        forwarder.flush()
+        python_logger = logging.getLogger("notificationforwarder_" + forwarder.forwarder_name)
+        logfile = [h.baseFilename for h in python_logger.handlers if hasattr(h, "baseFilename")][0]
+        values = re.findall(r'"message":"spooling queue length","queue_length":(\d+)', open(logfile).read())
+        assert values[-1] == "0"
+
+
 # ============================================================================
 # SpoolStore direct tests
 # ============================================================================

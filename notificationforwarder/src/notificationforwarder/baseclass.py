@@ -548,6 +548,11 @@ class NotificationForwarder(object):
                         'dropped_count': dropped,
                     })
                     self.spool_store.commit()
+                    # same line as in spool(), so a monitored queue length
+                    # also goes down again while the spool drains
+                    logger.info("spooling queue length", {
+                        'queue_length': self.spool_store.count()
+                    })
                 except Exception as e:
                     logger.critical("database flush+resubmit failed", {
                         'database_error': True,
