@@ -121,6 +121,8 @@ class JsonLogger(NotificationLogger):
             msg_data["split_count"] = context['split_count']
         if 'event_id' in context:
             msg_data["event_id"] = context['event_id']
+        if 'new_event_id' in context:
+            msg_data["new_event_id"] = context['new_event_id']
 
         # Add action type
         if 'action' in context:

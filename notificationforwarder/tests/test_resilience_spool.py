@@ -546,7 +546,7 @@ class TestSpoolReplayEdges:
         assert any("database error" in str(c) for c in critical_calls)
 
     def test_flush_beyond_batch_limit_stuck_detection(self, setup, monkeypatch):
-        """Flush with more than 10 events triggers stuck detection correctly."""
+        """Flush continues into the next batch and stops at the first failed replay."""
         forwarder = _new_forwarder(
             "example",
             forwarder_name="webhook",
@@ -559,11 +559,14 @@ class TestSpoolReplayEdges:
 
         assert forwarder.num_spooled_events() == 12
 
-        # All submits fail to trigger stuck detection
-        def always_fail(formatted_event):
-            return False
+        # the first 11 replays succeed, the 12th (in the second batch) fails
+        submitted = []
 
-        monkeypatch.setattr(forwarder, "submit", always_fail)
+        def fail_twelfth(formatted_event):
+            submitted.append(formatted_event.eventopts["event_num"])
+            return formatted_event.eventopts["event_num"] != 11
+
+        monkeypatch.setattr(forwarder, "submit", fail_twelfth)
 
         def format_ok(raw):
             fe = _formatted_event(raw)
@@ -579,8 +582,8 @@ class TestSpoolReplayEdges:
         original_logger = baseclass.logger
 
         class MockLogger:
-            def info(self, msg, *args, **kwargs):
-                info_calls.append(msg)
+            def info(self, msg, context=None, *args, **kwargs):
+                info_calls.append((msg, context))
             def critical(self, msg, *args, **kwargs):
                 critical_calls.append(msg)
             def warning(self, msg, *args, **kwargs):
@@ -594,14 +597,19 @@ class TestSpoolReplayEdges:
         finally:
             baseclass.logger = original_logger
 
-        # All 12 events should still be in spool (all failed)
-        assert forwarder.num_spooled_events() == 12
-
-        # Stuck detection should have triggered after the first batch (10 fetched, none replayed)
+        # the flush went on into the second batch and stopped at the 12th event
+        assert submitted == list(range(12))
+        assert forwarder.num_spooled_events() == 1
+        assert forwarder.flush_stopped_at == 12
         assert any("could not be submitted" in str(c) for c in critical_calls)
-
-        # spool replay summary should be logged
-        assert any("spool replay summary" in str(c) for c in info_calls)
+        summary = [ctx for msg, ctx in info_calls if msg == "spool replay summary"]
+        assert summary == [{
+            'attempted': 12,
+            'recovered_count': 11,
+            'stays_in_spool_count': 1,
+            'deleted_trash_count': 0,
+            'dropped_count': 0,
+        }]
 
     def test_flush_terminates_while_other_processes_spool(self, setup, monkeypatch):
         """Flush must not loop forever when concurrent processes keep spooling.
@@ -663,10 +671,10 @@ class TestSpoolReplayEdges:
             baseclass.logger = original_logger
             other_process.close()
 
-        # one batch failed completely -> stop, every event tried at most once
-        assert submitted == list(range(10))
-        # nothing lost: 12 original + 10 spooled concurrently
-        assert forwarder.num_spooled_events() == 22
+        # the first failed submit ends the flush
+        assert submitted == [0]
+        # nothing lost: 12 original + 1 spooled concurrently
+        assert forwarder.num_spooled_events() == 13
         # the stuck log counts only the rows of this flush's snapshot
         stuck = [ctx for msg, ctx in critical_calls if msg == "spooled events could not be submitted"]
         assert stuck == [{'spooled_count': 12, 'action': 'could_not_submit'}]
@@ -741,6 +749,256 @@ class TestSpoolReplayEdges:
 
         # After flush, baseclass_logs_summary should be True again
         assert forwarder.baseclass_logs_summary is True
+
+
+# ============================================================================
+# Flush stops at the first failure, rejected events move to the end
+# ============================================================================
+
+class _RecordingLogger:
+    """Records (level, message, context) of every log call."""
+    def __init__(self):
+        self.calls = []
+
+    def __getattr__(self, level):
+        def log(msg, context=None, *args, **kwargs):
+            self.calls.append((level, msg, context))
+        return log
+
+    def messages(self, level):
+        return [msg for lvl, msg, _ctx in self.calls if lvl == level]
+
+    def moved(self):
+        return [ctx for _lvl, msg, ctx in self.calls if msg == "spooled event moved to the end of the spool"]
+
+
+class TestFlushStopAndMoveToEnd:
+    """Spooled events are numbered 0, 1, 2, ... (ids 1, 2, 3, ...); the live event is "live"."""
+
+    LIVE = {"HOSTNAME": "h1", "event_num": "live"}
+
+    def _forwarder(self, monkeypatch, submit, num_spooled=3, heartbeat=False):
+        forwarder = _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+        )
+        for i in range(num_spooled):
+            forwarder.spool_store.enqueue({"HOSTNAME": "h1", "event_num": i})
+
+        def format_ok(raw):
+            fe = _formatted_event(raw)
+            fe.payload = {"data": "test"}
+            fe.summary = "test"
+            if raw.get("event_num") == "live":
+                fe.is_heartbeat = heartbeat
+            return fe
+
+        monkeypatch.setattr(forwarder, "format_event", format_ok)
+        monkeypatch.setattr(forwarder, "submit", submit)
+        # new() has set the module logger, so record from here on
+        self.log = _RecordingLogger()
+        monkeypatch.setattr(baseclass, "logger", self.log)
+        return forwarder
+
+    def _spooled(self, forwarder):
+        rows = forwarder.spool_store.fetch_batch(limit=100)
+        return [forwarder.spool_store.decode(text)["event_num"] for _id, text in rows]
+
+    def _timestamp(self, forwarder, event_id):
+        forwarder.dbcurs.execute(
+            "SELECT timestamp FROM {table} WHERE id = ?".format(table=forwarder.table_name), (event_id,))
+        return forwarder.dbcurs.fetchone()[0]
+
+    @staticmethod
+    def _reject_first(formatted_event):
+        return formatted_event.eventopts["event_num"] != 0
+
+    def test_flush_stops_at_first_failed_replay(self, setup, monkeypatch):
+        submitted = []
+
+        def always_fail(formatted_event):
+            submitted.append(formatted_event.eventopts["event_num"])
+            return False
+
+        forwarder = self._forwarder(monkeypatch, always_fail)
+        forwarder.flush()
+
+        assert submitted == [0]
+        assert self._spooled(forwarder) == [0, 1, 2]
+        assert forwarder.flush_stopped_at == 1
+        assert self.log.messages("critical") == ["event stays in spool", "spooled events could not be submitted"]
+
+    def test_flush_stops_after_successful_replays(self, setup, monkeypatch):
+        submitted = []
+
+        def fail_second(formatted_event):
+            submitted.append(formatted_event.eventopts["event_num"])
+            return formatted_event.eventopts["event_num"] != 1
+
+        forwarder = self._forwarder(monkeypatch, fail_second)
+        forwarder.flush()
+
+        assert submitted == [0, 1]
+        assert self._spooled(forwarder) == [1, 2]
+
+    def test_flush_stops_on_submit_timeout(self, setup, monkeypatch):
+        submitted = []
+
+        def time_out(formatted_event):
+            submitted.append(formatted_event.eventopts["event_num"])
+            raise baseclass.ForwarderTimeoutError("submit ran into a timeout")
+
+        forwarder = self._forwarder(monkeypatch, time_out)
+        forwarder.flush()
+
+        assert submitted == [0]
+        assert self._spooled(forwarder) == [0, 1, 2]
+
+    def test_flush_continues_after_trash(self, setup, monkeypatch):
+        submitted = []
+
+        def succeed(formatted_event):
+            submitted.append(formatted_event.eventopts["event_num"])
+            return True
+
+        forwarder = self._forwarder(monkeypatch, succeed, num_spooled=2)
+        format_ok = forwarder.format_event
+
+        def discard_first(raw):
+            fe = format_ok(raw)
+            if raw.get("event_num") == 0:
+                fe.discard()
+            return fe
+
+        monkeypatch.setattr(forwarder, "format_event", discard_first)
+        forwarder.flush()
+
+        assert submitted == [1]
+        assert self._spooled(forwarder) == []
+        assert forwarder.flush_stopped_at is None
+
+    def test_rejected_event_moves_to_end(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, self._reject_first)
+        forwarder.dbcurs.execute(
+            "UPDATE {table} SET timestamp = datetime('now', '-1 minutes') WHERE id = 1".format(
+                table=forwarder.table_name))
+        forwarder.dbconn.commit()
+        original_timestamp = self._timestamp(forwarder, 1)
+
+        # the flush stops at 0, the live event is accepted -> 0 moves behind 1 and 2
+        forwarder.forward(dict(self.LIVE))
+
+        assert self._spooled(forwarder) == [1, 2, 0]
+        assert self._timestamp(forwarder, 4) == original_timestamp
+        assert self.log.moved() == [{'event_id': 1, 'new_event_id': 4, 'action': 'moved_to_end'}]
+
+        # the next flush delivers 1 and 2 and stops at 0 again, which is now last
+        forwarder.forward(dict(self.LIVE))
+        assert self._spooled(forwarder) == [0]
+        assert len(self.log.moved()) == 1
+
+    def test_no_move_when_live_submit_fails(self, setup, monkeypatch):
+        def always_fail(formatted_event):
+            return False
+
+        forwarder = self._forwarder(monkeypatch, always_fail)
+        forwarder.forward(dict(self.LIVE))
+
+        assert self._spooled(forwarder) == [0, 1, 2, "live"]
+        assert self.log.moved() == []
+
+    def test_no_move_without_live_submit(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, self._reject_first)
+        # forward_formatted() without an event: flush only, nothing submitted afterwards
+        forwarder.forward_formatted(None)
+
+        assert self._spooled(forwarder) == [0, 1, 2]
+        assert self.log.moved() == []
+
+    def test_heartbeat_success_moves_rejected_event(self, setup, monkeypatch):
+        live_heartbeats = []
+
+        def reject_first(formatted_event):
+            if formatted_event.eventopts["event_num"] == "live":
+                live_heartbeats.append(formatted_event.is_heartbeat)
+            return self._reject_first(formatted_event)
+
+        forwarder = self._forwarder(monkeypatch, reject_first, heartbeat=True)
+        forwarder.forward(dict(self.LIVE))
+
+        assert live_heartbeats == [True]
+        assert self._spooled(forwarder) == [1, 2, 0]
+
+    def test_no_move_while_another_process_flushes(self, setup, monkeypatch):
+        import subprocess
+        holder = []
+
+        def reject_first_and_lock(formatted_event):
+            if formatted_event.eventopts["event_num"] == "live" and not holder:
+                # another process takes the flush lock between the flush and the move
+                holder.append(subprocess.Popen(
+                    [sys.executable, "-c",
+                     "import fcntl, sys\n"
+                     "f = open(sys.argv[1], 'w')\n"
+                     "fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+                     "print('locked', flush=True)\n"
+                     "sys.stdin.read()\n",
+                     forwarder.db_lock_file],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True))
+                assert holder[0].stdout.readline().strip() == "locked"
+            return self._reject_first(formatted_event)
+
+        forwarder = self._forwarder(monkeypatch, reject_first_and_lock)
+        try:
+            forwarder.forward(dict(self.LIVE))
+            assert self._spooled(forwarder) == [0, 1, 2]
+            assert self.log.moved() == []
+            assert "missed the flush lock, rejected event stays in place" in self.log.messages("debug")
+        finally:
+            holder[0].stdin.close()
+            holder[0].wait(timeout=10)
+
+        # the next flush stops at 0 again and, with the lock free, moves it
+        forwarder.forward(dict(self.LIVE))
+        assert self._spooled(forwarder) == [1, 2, 0]
+
+    def test_no_move_when_event_is_gone(self, setup, monkeypatch):
+        def reject_first_then_gone(formatted_event):
+            if formatted_event.eventopts["event_num"] == "live":
+                # another process delivered and removed event 0 meanwhile
+                other_process = SpoolStore(forwarder.db_file, forwarder.table_name)
+                other_process.open()
+                other_process.delete(1)
+                other_process.close()
+            return self._reject_first(formatted_event)
+
+        forwarder = self._forwarder(monkeypatch, reject_first_then_gone)
+        forwarder.forward(dict(self.LIVE))
+
+        assert self._spooled(forwarder) == [1, 2]
+        assert self.log.moved() == []
+
+    def test_no_move_when_event_is_already_last(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, self._reject_first, num_spooled=1)
+        forwarder.forward(dict(self.LIVE))
+
+        assert [event_id for event_id, _text in forwarder.spool_store.fetch_batch()] == [1]
+        assert self.log.moved() == []
+
+    def test_moved_event_still_expires(self, setup, monkeypatch):
+        forwarder = self._forwarder(monkeypatch, self._reject_first)
+        forwarder.dbcurs.execute(
+            "UPDATE {table} SET timestamp = datetime('now', '-4 minutes') WHERE id = 1".format(
+                table=forwarder.table_name))
+        forwarder.dbconn.commit()
+
+        forwarder.forward(dict(self.LIVE))
+        assert self._spooled(forwarder) == [1, 2, 0]
+
+        # a retention of 3 minutes, measured from the original spool time, drops 0
+        assert forwarder.spool_store.prune_expired(3) == 1
+        assert self._spooled(forwarder) == [1, 2]
 
 
 # ============================================================================
@@ -1064,4 +1322,51 @@ class TestSpoolStore:
         assert sorted(set(fetched_seqs) | set(remaining)) == list(range(num_events))
         assert set(kept_seqs) <= set(remaining)
         assert store.count() == num_events - len(deleted)
+        store.close()
+
+    def _store_with_rows(self, name, num_rows):
+        db_path = os.path.join(OMD_ROOT, "tmp", name)
+        store = SpoolStore(db_path, "test_events")
+        store.open()
+        store.init_db()
+        for i in range(num_rows):
+            store.enqueue({"seq": i})
+        return store
+
+    def test_move_to_end_keeps_payload_and_timestamp(self, setup):
+        """move_to_end() puts the row behind all others with its payload and timestamp."""
+        store = self._store_with_rows("test_spool_move.db", 3)
+        store.cursor.execute("UPDATE test_events SET timestamp = '2020-01-01 00:00:00' WHERE id = 1")
+        store.connection.commit()
+
+        assert store.move_to_end(1) == 4
+        rows = store.fetch_batch()
+        assert [(event_id, store.decode(text)["seq"]) for event_id, text in rows] == [(2, 1), (3, 2), (4, 0)]
+        store.cursor.execute("SELECT timestamp FROM test_events WHERE id = 4")
+        assert store.cursor.fetchone()[0] == "2020-01-01 00:00:00"
+        store.close()
+
+    def test_move_to_end_skips_last_and_missing_rows(self, setup):
+        """A row that is already last, or gone, is not moved."""
+        store = self._store_with_rows("test_spool_move_skip.db", 2)
+
+        assert store.move_to_end(2) is None
+        assert store.move_to_end(99) is None
+        assert [event_id for event_id, _text in store.fetch_batch()] == [1, 2]
+        store.close()
+
+    def test_move_to_end_does_not_hold_write_lock(self, setup):
+        """After move_to_end() and after a skipped move, other connections can insert."""
+        store = self._store_with_rows("test_spool_move_lock.db", 2)
+        other = sqlite3.connect(store.db_file, timeout=0.1)
+        try:
+            store.move_to_end(1)
+            other.execute("INSERT INTO test_events(payload) VALUES ('{}')")
+            other.commit()
+            store.move_to_end(99)
+            other.execute("INSERT INTO test_events(payload) VALUES ('{}')")
+            other.commit()
+        finally:
+            other.close()
+        assert store.count() == 4
         store.close()

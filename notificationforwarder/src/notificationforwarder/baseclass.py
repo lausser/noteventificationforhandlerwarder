@@ -330,6 +330,7 @@ class NotificationForwarder(object):
         return enrich_raw_event(raw_event)
 
     def forward_formatted(self, formatted_event):
+        self.flush_stopped_at = None
         try:
             """probe() checks if a forwarder is principally capable to submit
             an event. It is mostly used to contact an api and confirm that
@@ -376,6 +377,11 @@ class NotificationForwarder(object):
                     'formatted_event': formatted_event,
                     'status': 'success'
                 })
+            if formatted_event is not None and self.flush_stopped_at is not None:
+                # the receiver accepted this event, so it is up. the spooled
+                # event at which the flush stopped was rejected for its own
+                # reasons and must not block the spool until it expires.
+                self.move_stopped_event_to_end()
             return success
         return False
 
@@ -411,7 +417,38 @@ class NotificationForwarder(object):
     def acquire_lock_with_retry(self, lock_file, max_attempts=3, base_delay=0.1):
         return acquire_lock_with_retry(lock_file, logger, max_attempts=max_attempts, base_delay=base_delay)
 
+    def move_stopped_event_to_end(self):
+        event_id = self.flush_stopped_at
+        self.flush_stopped_at = None
+        try:
+            with open(self.db_lock_file, "w") as lock_file:
+                # a running flush could hold the row in memory, so move it
+                # only while no other process is flushing
+                if not self.acquire_lock_with_retry(lock_file, max_attempts=1):
+                    logger.debug("missed the flush lock, rejected event stays in place", {
+                        'event_id': event_id,
+                    })
+                    return
+                try:
+                    new_event_id = self.spool_store.move_to_end(event_id)
+                finally:
+                    import fcntl
+                    fcntl.lockf(lock_file, fcntl.LOCK_UN)
+            if new_event_id is not None:
+                logger.critical("spooled event moved to the end of the spool", {
+                    'event_id': event_id,
+                    'new_event_id': new_event_id,
+                    'action': 'moved_to_end',
+                })
+        except Exception as e:
+            logger.critical("could not move rejected spooled event", {
+                'event_id': event_id,
+                'exception': e,
+            })
+
     def flush(self):
+        # id of the spooled event at which the flush stopped, see move_stopped_event_to_end()
+        self.flush_stopped_at = None
         with open(self.db_lock_file, "w") as lock_file:
             locked = self.acquire_lock_with_retry(lock_file)
             if locked:
@@ -429,8 +466,10 @@ class NotificationForwarder(object):
                         })
                     # walk through the rows which existed when the flush started.
                     # rows spooled meanwhile by concurrent processes are left for the
-                    # next flush and each row is tried at most once, so the flush lock
-                    # is not held forever while the destination keeps failing.
+                    # next flush and each row is tried at most once. the first failed
+                    # submit ends the flush, because a receiver which does not accept
+                    # one event will most likely not accept the next ones either and
+                    # every further attempt would cost another submit timeout.
                     last_id = 0
                     snapshot_max_id = self.spool_store.max_id()
                     while True:
@@ -442,7 +481,6 @@ class NotificationForwarder(object):
                             'spooled_count': len(id_events),
                             'action': 'resend'
                         })
-                        progress = False
                         for id, text in id_events:
                             last_id = id
                             raw_event = self.spool_store.decode(text)
@@ -454,7 +492,6 @@ class NotificationForwarder(object):
                                     'action': 'discard_during_replay'
                                 })
                                 self.spool_store.delete(id)
-                                progress = True
                             elif formatted_event:
                                 replay_attempted += 1
                                 try:
@@ -465,7 +502,6 @@ class NotificationForwarder(object):
                                     error_message = str(e)
                                 if success:
                                     self.spool_store.delete(id)
-                                    progress = True
                                     replayed += 1
                                     logger.info("delete spooled event", {
                                         'spooled_count': 1,
@@ -481,6 +517,8 @@ class NotificationForwarder(object):
                                     if error_message:
                                         context['exception'] = error_message
                                     logger.critical("event stays in spool", context)
+                                    self.flush_stopped_at = id
+                                    break
                             else:
                                 deleted_trash += 1
                                 logger.critical("could not format spooled event", {
@@ -490,12 +528,11 @@ class NotificationForwarder(object):
                                     'action': 'could_not_format'
                                 })
                                 self.spool_store.delete(id)
-                                progress = True
                                 logger.info("delete trash event", {
                                     'event_id': id,
                                     'action': 'delete_trash'
                                 })
-                        if not progress:
+                        if self.flush_stopped_at is not None:
                             # only the rows this flush was responsible for, not
                             # the ones spooled concurrently after the snapshot
                             logger.critical("spooled events could not be submitted", {

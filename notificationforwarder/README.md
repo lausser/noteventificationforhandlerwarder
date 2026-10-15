@@ -500,9 +500,22 @@ define command{
 
 When forwarding to a recipient fails, the event is saved in a local sqlite database. The framework automatically attempts to re-submit these spooled events on every subsequent call to notificationforwarder for the same forwarder.
 
-The flush mechanism runs inside `forward_formatted()` for **every event** — not just heartbeats or special cases. Before submitting the current event, the framework checks if there are spooled events waiting. If there are, it attempts to flush them by calling `submit()` for each one. Events that are successfully submitted are deleted from the spool. Events that still fail stay in the queue for the next attempt.
+The flush mechanism runs inside `forward_formatted()` for **every event** — not just heartbeats or special cases. Before submitting the current event, the framework checks if there are spooled events waiting. If there are, it attempts to flush them by calling `submit()` for each one, oldest first. Events that are successfully submitted are deleted from the spool. The first event that fails again ends the flush: it and all later events stay in the queue for the next attempt. A receiver that does not accept one event will most likely not accept the next ones either, so a flush costs at most one submit timeout instead of one per spooled event.
+
+If the receiver rejects a spooled event for good (for example because of an invalid payload), that event must not block the queue until `max_spool_minutes` have passed. When a flush stopped at an event and the current event is then accepted by the receiver, the receiver is evidently up. The stopped event is moved to the end of the queue and logged as "spooled event moved to the end of the spool". It keeps its original time, so it is still dropped when `max_spool_minutes` have passed, and the next flush can deliver the events behind it.
 
 This means that in a busy monitoring environment where notifications flow regularly, spooled events get drained naturally — each new notification triggers a flush attempt on its way through.
+
+### Delivery Order
+
+Spooled events are stored and re-submitted in the order in which they failed. As long as every delivery succeeds, the receiver gets the events in the order in which they were created. After delivery failures, this is not guaranteed. A newer event can reach the receiver before an older one, for example a RECOVERY before its PROBLEM:
+
+- While one notificationforwarder process is flushing the spool, another process submits its own new event directly, ahead of the spooled ones.
+- A spooled event was rejected while the receiver accepted the current event. The rejected event is moved to the end of the spool and is delivered, if at all, after newer events.
+- The flush stopped early, or `probe()` returned False. The process still submits its own new event directly.
+- A submit ran into the timeout, but the receiver got the event anyway. The event stays in the spool, and the receiver gets it a second time later, after newer events.
+
+If the receiver depends on the order, let the formatter include the event's creation time (`omd_originating_timestamp`, set for every event) in the payload. The receiver or its integration can then ignore an event that is older than the state it already has.
 
 ### Probe Method
 

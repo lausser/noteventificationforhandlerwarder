@@ -417,6 +417,20 @@ class TestTextLoggerMessageBranches:
         finally:
             pl.removeHandler(h)
 
+    def test_spooled_event_moved_to_end(self, setup):
+        """'spooled event moved to the end of the spool' names the old and new id."""
+        logger, pl, h = self._make_logger("test_moved_to_end")
+        try:
+            message = logger._build_message("spooled event moved to the end of the spool", {
+                'event_id': 7,
+                'new_event_id': 31,
+                'action': 'moved_to_end',
+            })
+        finally:
+            pl.removeHandler(h)
+        assert message == ("event 7 was rejected while the receiver accepts other events "
+                           "and moved to the end of the spool as 31")
+
     def test_delivery_failed_could_not_persist(self, setup):
         """'delivery failed and event could not be persisted' message."""
         logger, pl, h = self._make_logger("test_could_not_persist")
@@ -472,6 +486,29 @@ class TestJsonLoggerStructuredFields:
             })
         finally:
             pl.removeHandler(h)
+
+    def test_moved_to_end_structured_fields(self, setup):
+        """JSON output of a moved event includes both ids and the action."""
+        import io
+        import json as json_mod
+        logger, pl, h = self._make_logger("test_json_moved_to_end")
+        stream = io.StringIO()
+        capture = logging.StreamHandler(stream)
+        pl.addHandler(capture)
+        try:
+            logger.critical("spooled event moved to the end of the spool", {
+                'event_id': 7,
+                'new_event_id': 31,
+                'action': 'moved_to_end',
+            })
+        finally:
+            pl.removeHandler(capture)
+            pl.removeHandler(h)
+        entry = json_mod.loads(stream.getvalue().strip().splitlines()[-1])
+        text = json_mod.dumps(entry)
+        assert '"event_id": 7' in text
+        assert '"new_event_id": 31' in text
+        assert '"action": "moved_to_end"' in text
 
     def test_failure_structured_fields(self, setup):
         """JSON failure path includes spool and exception fields."""

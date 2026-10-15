@@ -80,6 +80,23 @@ class SpoolStore:
             self.cursor.execute("DELETE FROM " + self.table_name + " WHERE id = ?", (event_id,))
             self.connection.commit()
 
+    def move_to_end(self, event_id):
+        # re-insert the row behind all others, keeping payload and timestamp,
+        # so it still expires on schedule. a row which is gone or already the
+        # last one (this includes a reused id) is left alone.
+        sql_copy = ("INSERT INTO " + self.table_name + "(payload, timestamp)"
+                    " SELECT payload, timestamp FROM " + self.table_name +
+                    " WHERE id = ? AND id < (SELECT MAX(id) FROM " + self.table_name + ")")
+        with self._lock:
+            self.cursor.execute(sql_copy, (event_id,))
+            if self.cursor.rowcount != 1:
+                self.connection.commit()
+                return None
+            new_id = self.cursor.lastrowid
+            self.cursor.execute("DELETE FROM " + self.table_name + " WHERE id = ?", (event_id,))
+            self.connection.commit()
+            return new_id
+
     def decode(self, text):
         return json.loads(text)
 

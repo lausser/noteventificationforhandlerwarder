@@ -167,12 +167,31 @@ Integration tests for `load_forwarder()` using the `pythonpath/lib/python` test 
 | Test | What it verifies | Intention |
 |------|------------------|-----------|
 | `test_discarded_event_deleted_with_trash_log` | Spooled event returning a discarded `FormattedEvent` during replay is skipped and deleted, not submitted | The flush loop checks `is_discarded` and treats discarded events as trash. |
-| `test_persistent_failure_keeps_row_and_terminates` | `submit()` always returning `False` → event stays in spool, stuck detection fires | Persistent failures are not silently dropped; the system logs and stops retrying. |
+| `test_persistent_failure_keeps_row_and_terminates` | `submit()` always returning `False` → event stays in spool, stuck detection fires | Persistent failures are not silently dropped; the system logs and stops at the first failed replay. |
 | `test_spool_init_failure_returns_false` | `SpoolStore.enqueue` raising `sqlite3.OperationalError` → returns `False` with "database error" log | Database errors are caught and logged, not raised. |
-| `test_flush_beyond_batch_limit_stuck_detection` | 12 spooled events (exceeds batch limit of 10) with all submits failing → stuck detection, all events stay | The stuck detection logic handles batch boundaries correctly. |
-| `test_flush_terminates_while_other_processes_spool` | All submits fail while a second connection spools a new event after each submit → flush stops after the first batch, events 0–9 submitted once each, all 22 rows kept, stuck log reports `spooled_count` 12 (snapshot rows, not the live queue) | A flush is bounded to the rows present at its start; concurrent spooling cannot keep it (and the flush lock) alive. |
+| `test_flush_beyond_batch_limit_stuck_detection` | 12 spooled events (exceeds batch limit of 10), the first 11 replays succeed and the 12th fails → the flush continues into the second batch, stops at the 12th event, summary attempted=12, recovered=11, stays_in_spool=1 | Batch boundaries do not end a flush; only a failed replay does, and the counters stay accurate. |
+| `test_flush_terminates_while_other_processes_spool` | All submits fail while a second connection spools a new event after each submit → flush stops at the first failed submit, only event 0 submitted, all 13 rows kept, stuck log reports `spooled_count` 12 (snapshot rows, not the live queue) | A flush is bounded to the rows present at its start; concurrent spooling cannot keep it (and the flush lock) alive. |
 | `test_formatter_returns_none_during_replay_deletes_trash` | `format_event` returning `None` during replay → event deleted as trash | Un-formattable events are cleaned up, not retried forever. |
 | `test_summary_logging_resumes_after_flush` | `baseclass_logs_summary` is reset to `True` at flush start | The no_more_logging flag is reset so operators see summary logs after recovery. |
+
+### class TestFlushStopAndMoveToEnd
+
+Spooled events 0, 1, 2 (ids 1, 2, 3) are replayed through a mocked `submit()`; the live event is forwarded with `forward()`.
+
+| Test | What it verifies | Intention |
+|------|------------------|-----------|
+| `test_flush_stops_at_first_failed_replay` | All replays fail → only event 0 submitted, all three stay, `flush_stopped_at` = 1, critical "event stays in spool" and "spooled events could not be submitted" | During an outage a flush costs one submit timeout, not one per spooled event. |
+| `test_flush_stops_after_successful_replays` | Event 0 succeeds, event 1 fails → 0 removed, 2 not submitted, 1 and 2 stay | The flush stops at the first failure, also after successful replays. |
+| `test_flush_stops_on_submit_timeout` | `submit()` raises `ForwarderTimeoutError` → only event 0 submitted | A timeout counts as a failed replay. |
+| `test_flush_continues_after_trash` | Event 0 discarded during replay, event 1 succeeds → spool empty, `flush_stopped_at` is `None` | Removed trash does not stop the flush. |
+| `test_rejected_event_moves_to_end` | Event 0 rejected, live event accepted → spool order 1, 2, 0; the moved row (id 4) keeps the original timestamp; critical "spooled event moved to the end of the spool" with `event_id` 1, `new_event_id` 4; the next forward delivers 1 and 2 and does not move 0 again (now last) | A permanently rejected event cannot block the backlog. |
+| `test_no_move_when_live_submit_fails` | All submits fail → spool 0, 1, 2, live; no move | During an outage the order of the backlog stays as it is. |
+| `test_no_move_without_live_submit` | `forward_formatted(None)` → flush stops at 0, nothing submitted afterwards, no move | Only a successful submit proves that the receiver is up. |
+| `test_heartbeat_success_moves_rejected_event` | Live event is a heartbeat and is accepted → spool order 1, 2, 0 | Heartbeats also prove that the receiver is up. |
+| `test_no_move_while_another_process_flushes` | A child process takes the flush lock while the live event is submitted → no move, debug "missed the flush lock, rejected event stays in place"; after the lock is released the next forward moves 0 | A running flush may hold the row in memory, so the move happens only under the flush lock. |
+| `test_no_move_when_event_is_gone` | Another connection deletes event 0 while the live event is submitted → spool 1, 2, no move, no duplicate | A row delivered by another process is not copied back. |
+| `test_no_move_when_event_is_already_last` | The rejected event is the only one → stays with id 1, no move log | Moving the last event would change nothing. |
+| `test_moved_event_still_expires` | Event 0 spooled 4 minutes ago is moved, then `prune_expired(3)` drops it | Retention is measured from the original spool time. |
 
 ### class TestSpoolStore
 
@@ -192,6 +211,9 @@ Low-level `SpoolStore` operations against a real SQLite database.
 | `test_decode_round_trip` | JSON encode → decode produces the original dict | Serialization preserves data. |
 | `test_concurrent_enqueue` | Two threads each enqueuing 10 events concurrently → 20 rows, no corruption | Thread safety of concurrent writes. |
 | `test_concurrent_enqueue_shared_instance` | Two threads each enqueue 10 events on one shared SpoolStore instance → 20 rows, no errors | The per-instance thread lock serializes access to the shared cursor; without it the test fails or crashes the interpreter. |
+| `test_move_to_end_keeps_payload_and_timestamp` | `move_to_end(1)` with 3 rows → returns 4, order (2, 1), (3, 2), (4, 0), timestamp of the moved row unchanged | The moved row still expires on schedule. |
+| `test_move_to_end_skips_last_and_missing_rows` | `move_to_end()` of the last row or a missing id → `None`, rows unchanged | A reused id is always the last one, so it is never moved. |
+| `test_move_to_end_does_not_hold_write_lock` | After a move and after a skipped move, a second connection with a 0.1 s busy timeout can insert | The move commits, other processes can keep spooling. |
 | `test_concurrent_mixed_operations_shared_instance` | One thread enqueues 200 events while another fetches (by `after_id`), counts and deletes every other row on the same instance → no errors, fetched rows in id order and never twice, every event either fetched or still spooled, `count()` = enqueued − deleted | Mixed operations on a shared instance stay consistent. SQLite reuses the id of a deleted last row, so the test does not assume ids grow monotonically. |
 
 ---
@@ -372,6 +394,7 @@ Smoke tests for every logging call path in `baseclass.py`. Each test calls a spe
 | `test_concurrent_flush_suppressed` | `info("concurrent flush suppressed", ...)` renders | Concurrent flush suppression path is covered. |
 | `test_spooled_events_to_be_resent` | `info("spooled events to be re-sent", ...)` renders | Spool replay initiation path is covered. |
 | `test_spooled_events_could_not_be_submitted` | `critical("spooled events could not be submitted", ...)` renders | Persistent submission failure path is covered. |
+| `test_spooled_event_moved_to_end` | `action: moved_to_end` renders "event 7 was rejected while the receiver accepts other events and moved to the end of the spool as 31" | The text log names the old and the new id of a moved event. |
 | `test_delivery_failed_could_not_persist` | `critical("delivery failed and event could not be persisted", ...)` renders | Unrecoverable failure path is covered. |
 | `test_formatted_event_incomplete` | `critical("formatted event incomplete", ...)` renders | Incomplete event path is covered. |
 
@@ -380,6 +403,7 @@ Smoke tests for every logging call path in `baseclass.py`. Each test calls a spe
 | Test | What it verifies | Intention |
 |------|------------------|-----------|
 | `test_success_structured_fields` | JsonLogger `info("forwarded", ...)` with event, status, forwarder_name, split_count renders structured JSON | Success path JSON structure is correct. |
+| `test_moved_to_end_structured_fields` | JsonLogger output of a moved event contains `event_id`, `new_event_id` and `action` | Both ids reach the JSON log. |
 | `test_failure_structured_fields` | JsonLogger `critical("forward failed", ...)` with exception, event, spooled, forwarder_name, attempt renders structured JSON | Failure path JSON structure is correct. |
 
 ---
