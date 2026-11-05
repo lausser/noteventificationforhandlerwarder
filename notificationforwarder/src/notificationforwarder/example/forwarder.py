@@ -3,6 +3,8 @@ import time
 import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
+logger = None  # Set by the component loader.
+
 
 class ExampleForwarder(NotificationForwarder):
     def __init__(self, opts):

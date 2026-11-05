@@ -89,7 +89,7 @@ class JsonLogger(NotificationLogger):
                         msg_data["exception"]["trace"] = ''.join(
                             traceback.format_exception(*context['exc_info'])
                         )
-                    except:
+                    except Exception:
                         pass
             else:
                 msg_data["exception"] = str(exc)

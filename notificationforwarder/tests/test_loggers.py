@@ -148,6 +148,21 @@ class TestTextLogger:
 # ============================================================================
 
 class TestJsonLogger:
+    @pytest.mark.parametrize("error_type", [ValueError, KeyboardInterrupt, SystemExit])
+    def test_trace_formatting_exceptions(self, monkeypatch, error_type):
+        def fail_formatting(*args):
+            raise error_type("trace failed")
+
+        monkeypatch.setattr("notificationforwarder.json.logger.traceback.format_exception", fail_formatting)
+        logger = JsonLogger("trace_test", logging.getLogger("trace_test"))
+        context = {"exception": ValueError("original"), "exc_info": (ValueError, ValueError("original"), None)}
+        if error_type is ValueError:
+            entry = logger._build_json_entry("ERROR", "failure", context)
+            assert "trace" not in entry["msg"]["exception"]
+        else:
+            with pytest.raises(error_type):
+                logger._build_json_entry("ERROR", "failure", context)
+
     def test_simple_json_message(self, setup):
         """JsonLogger handles simple messages."""
         logger_name = "test_json_logger"

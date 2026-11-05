@@ -36,6 +36,7 @@ This document describes every test file, test case, and the code paths they cove
 - [test_oauth2webhook.py](#test_oauth2webhookpy)
 - [test_reporter.py](#test_reporterpy)
 - [test_logger.py](#test_loggerpy)
+- [test_lint_gate.py](#test_lint_gatepy)
 
 ---
 

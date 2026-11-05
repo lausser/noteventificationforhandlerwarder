@@ -1,9 +1,11 @@
 import json
+import importlib.util
 import logging
 import os
 import shutil
 import sys
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -56,6 +58,22 @@ def _new_forwarder(formatter_name, forwarder_name="example", forwarder_opts=None
 
 def _formatted_event(eventopts):
     return FormattedEvent(dict(eventopts))
+
+
+def test_rabbitmq_disconnect_closes_connection_without_broker(monkeypatch):
+    monkeypatch.setitem(sys.modules, "pika", SimpleNamespace())
+    path = os.path.join(OMD_ROOT, "..", "src", "notificationforwarder", "rabbitmq", "forwarder.py")
+    spec = importlib.util.spec_from_file_location("rabbitmq_disconnect_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    connection = Mock()
+    runner = SimpleNamespace(connection=connection)
+
+    module.RabbitmqForwarder.disconnect(runner)
+    connection.close.assert_called_once_with()
+    connection.close.side_effect = RuntimeError("close failed")
+    module.RabbitmqForwarder.disconnect(runner)
+    assert connection.close.call_count == 2
 
 
 def test_builtin_formatters_render_expected_payloads(setup):

@@ -469,6 +469,46 @@ For broader confidence, run the full suite:
 pytest
 ```
 
+### Focused lint gate
+
+`notificationforwarder/.flake8` selects `E9,E722,F63,F7,F82` and sets
+`max-line-length = 120`. The check fails for undefined names, syntax errors,
+other selected structural errors, and bare `except` handlers.
+Undefined-name detection (F821) stays enabled: it is not suppressed globally,
+per file, or with inline `noqa`. Forwarders whose `logger` is injected by the
+component loader bind `logger = None`; they do not suppress F821.
+
+CI runs this gate on Python 3.12 with flake8 7.5.0. The `test` extra lists
+`flake8` without a pin; Python 3.9 and 3.10 cannot install flake8 7.5.0
+(that release requires Python >=3.11), which is why the gate job is pinned
+separately.
+
+Run the gate:
+
+```bash
+# from notificationforwarder/
+flake8 --config .flake8 src/notificationforwarder --count --statistics
+
+# from the repository root
+flake8 --config notificationforwarder/.flake8 notificationforwarder/src/notificationforwarder --count --statistics
+```
+
+Expect zero findings on a clean tree.
+
+Full diagnostic report, from `notificationforwarder/`. This is not the gate:
+codes it reports that the gate does not select are not certified fixed or
+harmless; reviewers read this report for those findings (examples on the
+current tree: E501, F401, E402):
+
+```bash
+flake8 --isolated src/notificationforwarder/ --max-line-length=120 --statistics --count
+```
+
+`tests/test_lint_gate.py` is the committed rejection probe: it proves the gate
+rejects an undefined name, fails closed on a missing config, and that the
+`logger = None` bindings do not hide other F821 findings. It runs flake8 from
+the same interpreter that has the `test` extra installed.
+
 ## Reporters
 
 Like *forwarder* and *formatter*, a *reporter* is an instance of a *NotificationReporter* class defined in a file named *reporter.py*. There is one class coming with notificationforwarder, the *NaemonlogReporter*. It's purpose it to write a message to the Naemon logfile. When notificationforwarder is run as a standalone script (and not triggered as a notificationhandler by Naemon), the *NaemonlogReporter* can nevertheless leave a line in the Naemon log.

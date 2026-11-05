@@ -1,4 +1,5 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# This workflow installs Python dependencies and runs tests across a matrix of
+# Python versions, and runs the focused correctness lint gate on Python 3.12.
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
 name: Python package omdnotificationforwarder
@@ -36,13 +37,6 @@ jobs:
     - name: Install test dependencies
       run: |
         python -m pip install .[test]
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        ##flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        ##flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        echo LMAA, Linter
     - name: Test with pytest
       run: |
         pytest
@@ -52,4 +46,24 @@ jobs:
       timeout-minutes: 30
       with:
         limit-access-to-actor: true
+
+  lint-notificationforwarder:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./notificationforwarder
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5.6.0
+      with:
+        python-version: "3.12"
+    - name: Install flake8 7.5.0
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8==7.5.0
+    - name: Lint with flake8
+      run: |
+        python -m flake8 --version
+        python -m flake8 --config .flake8 src/notificationforwarder --count --statistics
 

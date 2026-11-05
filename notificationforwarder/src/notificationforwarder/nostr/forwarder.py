@@ -7,6 +7,8 @@ except ImportError as exc:
 
 from notificationforwarder.baseclass import NotificationForwarder, timeout
 
+logger = None  # Set by the component loader.
+
 
 class NostrForwarder(NotificationForwarder):
     def __init__(self, opts):

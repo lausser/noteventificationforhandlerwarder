@@ -3,6 +3,8 @@ import json
 import logging
 from notificationforwarder.baseclass import NotificationForwarder, NotificationFormatter, timeout
 
+logger = None  # Set by the component loader.
+
 
 class RabbitmqForwarder(NotificationForwarder):
     def __init__(self, opts):
@@ -50,7 +52,7 @@ class RabbitmqForwarder(NotificationForwarder):
             logger.critical("rabbitmq connect failed with error {}".format(e))
             return False
 
-    def disconnect(iself):
+    def disconnect(self):
         try:
             self.connection.close()
         except Exception as e:
