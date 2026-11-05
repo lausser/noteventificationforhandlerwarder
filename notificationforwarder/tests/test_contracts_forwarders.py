@@ -210,7 +210,7 @@ class TestEmailForwarder:
         monkeypatch.setattr(email_module.smtplib, "SMTP", raise_smtp)
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         event = {"description": "needs retry"}
         forwarder.forward(event)
@@ -443,7 +443,7 @@ class TestTelegramForwarder:
         event = {"description": "heartbeat"}
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a formatted event with is_heartbeat=True
         mock_formatted = _formatted_event({"description": "heartbeat"})
@@ -471,7 +471,7 @@ class TestTelegramForwarder:
         event = {"description": "normal"}
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a formatted event without heartbeat
         mock_formatted = _formatted_event({"description": "normal"})
@@ -561,7 +561,7 @@ class TestWebhookForwarder:
         )
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
         forwarder.forward({"description": "needs retry"})
         assert spooled and spooled[0]["description"] == "needs retry"
 
@@ -575,7 +575,7 @@ class TestWebhookForwarder:
             "post",
             lambda *args, **kwargs: SimpleNamespace(status_code=500, text="nope", reason="bad"),
         )
-        monkeypatch.setattr(forwarder2, "spool", lambda raw_event: False)
+        monkeypatch.setattr(forwarder2, "spool", lambda raw_event: (False, None))
         forwarder2.forward({"description": "cannot persist"})
 
 
@@ -880,7 +880,7 @@ class TestOwnForwarderSmoke:
         monkeypatch.setattr(forwarder, "submit", lambda fe: False)
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         event = {"description": "needs retry"}
         forwarder.forward(event)
@@ -904,7 +904,7 @@ class TestOwnForwarderSmoke:
         monkeypatch.setattr(forwarder, "submit", lambda fe: False)
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a heartbeat event
         mock_formatted = _formatted_event({"description": "heartbeat"})

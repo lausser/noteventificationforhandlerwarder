@@ -150,7 +150,7 @@ def test_example_forwarder_forward_timeout(setup):
     log = open(get_logfile(example)).read()
     # this is the global log, written by the baseclass
     assert "submit ran into a timeout" in log
-    assert "spooled <sum: halo i bims 1 alarm vong naemon her>" in log
+    assert "forward failed, spool id 1 summary <sum: halo i bims 1 alarm vong naemon her>" in log
     assert "WARNING - spooling queue length is 1" in log
     eventopts = {
         "description": "halo i bim au 1 alarm vong naemon her",
@@ -159,7 +159,7 @@ def test_example_forwarder_forward_timeout(setup):
     example = notificationforwarder.baseclass.new("example", None, "example", True, True,  forwarderopts)
     example.forward(eventopts)
     log = open(get_logfile(example)).read()
-    assert "spooled <sum: halo i bim au 1 alarm vong naemon her>" in log
+    assert "forward failed, spool id 2 summary <sum: halo i bim au 1 alarm vong naemon her>" in log
     assert "WARNING - spooling queue length is 2" in log
     # now the last two events were spooled and are in the database
 

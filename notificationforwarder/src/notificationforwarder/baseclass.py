@@ -269,13 +269,11 @@ class NotificationForwarder(object):
             result = self.forward_formatted(formatted_event)
             success, report_payload, error_message = apply_forward_result(result)
             if not success and not formatted_event.is_heartbeat:
-                spooled = self.spool(raw_event)
-                if spooled:
-                    failure_context = {
-                        'formatted_event': formatted_event,
-                        'spooled': True,
-                        'status': 'failed',
-                    }
+                spool_success, event_id = self.spool(raw_event)
+                if spool_success:
+                    failure_context = self.spool_event_context(event_id, formatted_event, raw_event)
+                    failure_context['spooled'] = True
+                    failure_context['status'] = 'failed'
                     if error_message:
                         failure_context['exception'] = error_message
                     logger.warning("forward failed", failure_context)
@@ -400,19 +398,38 @@ class NotificationForwarder(object):
 
     def spool(self, raw_event):
         try:
-            self.spool_store.enqueue(raw_event)
+            event_id = self.spool_store.enqueue(raw_event)
             spooled_events = self.num_spooled_events()
             logger.warning("spooling queue length", {
                 'queue_length': spooled_events
             })
-            return True
+            return (True, event_id)
         except Exception as e:
             logger.critical("database error", {
                 'database_error': True,
                 'exception': e
             })
             logger.info("raw event details", {'raw_event': raw_event})
-            return False
+            return (False, None)
+
+    def spool_event_context(self, event_id, formatted_event, raw_event):
+        """Build the log context for a line which names a spool entry.
+
+        The id and the decoded raw event are always included, so every line
+        answers by itself which event is behind it. The summary is only
+        included when a formatted event exists and has a non-empty summary,
+        otherwise the key is omitted. The raw event carries the content even
+        when no formatted event exists (formatter failure).
+        """
+        context = {
+            'event_id': event_id,
+            'raw_event': raw_event,
+        }
+        if formatted_event is not None:
+            context['formatted_event'] = formatted_event
+            if getattr(formatted_event, 'summary', None):
+                context['summary'] = formatted_event.summary
+        return context
 
     def acquire_lock_with_retry(self, lock_file, max_attempts=3, base_delay=0.1):
         return acquire_lock_with_retry(lock_file, logger, max_attempts=max_attempts, base_delay=base_delay)
@@ -454,7 +471,8 @@ class NotificationForwarder(object):
             if locked:
                 self.baseclass_logs_summary = True
                 try:
-                    dropped = self.spool_store.prune_expired(self.max_spool_minutes)
+                    dropped_rows = self.spool_store.prune_expired(self.max_spool_minutes)
+                    dropped = len(dropped_rows)
                     replay_attempted = 0
                     replayed = 0
                     stayed_in_spool = 0
@@ -464,6 +482,24 @@ class NotificationForwarder(object):
                             'spooled_count': dropped,
                             'action': 'dropped'
                         })
+                        # one line per expired event, so the operator can see
+                        # which events were thrown away. decoding happens
+                        # outside the database write lock, wrapped per row,
+                        # so an undecodable payload cannot abort the flush
+                        for expired_id, expired_text in dropped_rows:
+                            try:
+                                expired_event = self.spool_store.decode(expired_text)
+                            except Exception as e:
+                                logger.critical("expired spool entry could not be decoded", {
+                                    'event_id': expired_id,
+                                    'payload_text': expired_text,
+                                    'action': 'expired_undecodable',
+                                    'exception': e,
+                                })
+                                continue
+                            context = self.spool_event_context(expired_id, None, expired_event)
+                            context['action'] = 'expired'
+                            logger.info("expired spooled event", context)
                     # walk through the rows which existed when the flush started.
                     # rows spooled meanwhile by concurrent processes are left for the
                     # next flush and each row is tried at most once. the first failed
@@ -484,13 +520,13 @@ class NotificationForwarder(object):
                         for id, text in id_events:
                             last_id = id
                             raw_event = self.spool_store.decode(text)
-                            formatted_event = self.format_event(raw_event)
+                            # Keep the stored event intact for logging even if plugins mutate their input.
+                            formatted_event = self.format_event(self.spool_store.decode(text))
                             if formatted_event and formatted_event.is_discarded:
                                 deleted_trash += 1
-                                logger.info("discard spooled event during replay", {
-                                    'event_id': id,
-                                    'action': 'discard_during_replay'
-                                })
+                                context = self.spool_event_context(id, formatted_event, raw_event)
+                                context['action'] = 'discard_during_replay'
+                                logger.info("discard spooled event during replay", context)
                                 self.spool_store.delete(id)
                             elif formatted_event:
                                 replay_attempted += 1
@@ -503,35 +539,29 @@ class NotificationForwarder(object):
                                 if success:
                                     self.spool_store.delete(id)
                                     replayed += 1
-                                    logger.info("delete spooled event", {
-                                        'spooled_count': 1,
-                                        'event_id': id,
-                                        'action': 'delete'
-                                    })
+                                    context = self.spool_event_context(id, formatted_event, raw_event)
+                                    context['spooled_count'] = 1
+                                    context['action'] = 'delete'
+                                    logger.info("delete spooled event", context)
                                 else:
                                     stayed_in_spool += 1
-                                    context = {
-                                        'event_id': id,
-                                        'action': 'stays_in_spool'
-                                    }
+                                    context = self.spool_event_context(id, formatted_event, raw_event)
                                     if error_message:
                                         context['exception'] = error_message
+                                    context['action'] = 'stays_in_spool'
                                     logger.critical("event stays in spool", context)
                                     self.flush_stopped_at = id
                                     break
                             else:
                                 deleted_trash += 1
-                                logger.critical("could not format spooled event", {
-                                    'raw_event': raw_event,
-                                    'event_id': id,
-                                    'spooled_count': 1,
-                                    'action': 'could_not_format'
-                                })
+                                context = self.spool_event_context(id, None, raw_event)
+                                context['spooled_count'] = 1
+                                context['action'] = 'could_not_format'
+                                logger.critical("could not format spooled event", context)
                                 self.spool_store.delete(id)
-                                logger.info("delete trash event", {
-                                    'event_id': id,
-                                    'action': 'delete_trash'
-                                })
+                                context = self.spool_event_context(id, None, raw_event)
+                                context['action'] = 'delete_trash'
+                                logger.info("delete trash event", context)
                         if self.flush_stopped_at is not None:
                             # only the rows this flush was responsible for, not
                             # the ones spooled concurrently after the snapshot

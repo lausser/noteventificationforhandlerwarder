@@ -45,18 +45,28 @@ class SpoolStore:
         sql_insert = "INSERT INTO " + self.table_name + "(payload) VALUES (?)"
         with self._lock:
             self.cursor.execute(sql_insert, (json.dumps(raw_event),))
+            # capture the lastrowid inside the lock, a later INSERT on the
+            # shared cursor by another thread would overwrite it
+            event_id = self.cursor.lastrowid
             self.connection.commit()
+            return event_id
 
     def prune_expired(self, max_spool_minutes):
         outdated = int(time.time() - 60 * max_spool_minutes)
-        sql_delete = "DELETE FROM " + self.table_name + " WHERE CAST(STRFTIME('%s', timestamp) AS INTEGER) < ?"
+        sql_expire = "WHERE CAST(STRFTIME('%s', timestamp) AS INTEGER) < ?"
         with self._lock:
-            self.cursor.execute(sql_delete, (outdated,))
-            dropped = self.cursor.rowcount
-            # commit immediately, otherwise the implicit transaction keeps
-            # the database write-locked for other processes during a flush
-            self.connection.commit()
-            return dropped
+            self.cursor.execute("BEGIN IMMEDIATE")
+            try:
+                # The transaction prevents another connection from changing
+                # the rows between the selection and deletion.
+                self.cursor.execute("SELECT id, payload FROM " + self.table_name + " " + sql_expire, (outdated,))
+                expired = self.cursor.fetchall()
+                self.cursor.execute("DELETE FROM " + self.table_name + " " + sql_expire, (outdated,))
+                self.connection.commit()
+                return expired
+            except Exception:
+                self.connection.rollback()
+                raise
 
     def max_id(self):
         with self._lock:

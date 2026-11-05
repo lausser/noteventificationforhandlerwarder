@@ -400,7 +400,7 @@ class TestNostrMissingPTag:
         )
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a valid formatted event without p tag
         def format_no_p(raw):
@@ -683,7 +683,7 @@ class TestNostrRelayFailureSpools:
         )
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a valid formatted event
         def format_ok(raw):

@@ -6,6 +6,7 @@ formatter failures, and spool replay edge cases.
 """
 import logging
 import os
+import json
 import shutil
 import sys
 import sqlite3
@@ -83,7 +84,7 @@ class TestHeartbeatSpoolPolicy:
         )
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a heartbeat formatted event
         mock_formatted = _formatted_event({"description": "heartbeat event"})
@@ -148,7 +149,7 @@ class TestHeartbeatSpoolPolicy:
         )
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         # Mock format_event to return a non-heartbeat formatted event
         mock_formatted = _formatted_event({"description": "normal event"})
@@ -351,7 +352,7 @@ class TestFormatterFailure:
         monkeypatch.setattr(forwarder, "new_formatter", raise_formatter)
 
         spooled = []
-        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+        monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
 
         event = {"description": "test"}
         result = forwarder.forward(event)
@@ -542,8 +543,30 @@ class TestSpoolReplayEdges:
         finally:
             baseclass.logger = original_logger
 
-        assert result is False
+        assert result == (False, None)
         assert any("database error" in str(c) for c in critical_calls)
+
+    def test_spool_returns_tuple_contract(self, setup, monkeypatch):
+        """spool() returns (success, event_id); on failure (False, None)."""
+        forwarder = _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+        )
+
+        raw_event = {"HOSTNAME": "h-tuple", "description": "pin me"}
+        success, event_id = forwarder.spool(raw_event)
+        assert success is True
+        assert event_id == forwarder.spool_store.max_id()
+        # the event_id identifies the exact stored row
+        stored = [row for row in forwarder.spool_store.fetch_batch() if row[0] == event_id]
+        assert forwarder.spool_store.decode(stored[0][1]) == raw_event
+
+        def raise_enqueue(raw_event):
+            raise sqlite3.OperationalError("database is locked")
+
+        forwarder.spool_store.enqueue = raise_enqueue
+        assert forwarder.spool({"description": "doomed"}) == (False, None)
 
     def test_flush_beyond_batch_limit_stuck_detection(self, setup, monkeypatch):
         """Flush continues into the next batch and stops at the first failed replay."""
@@ -752,8 +775,571 @@ class TestSpoolReplayEdges:
 
 
 # ============================================================================
-# Flush stops at the first failure, rejected events move to the end
+# Correlation of spool-related log lines
 # ============================================================================
+
+def _logfile_path(forwarder):
+    python_logger = logging.getLogger("notificationforwarder_" + forwarder.forwarder_name)
+    return [h.baseFilename for h in python_logger.handlers if hasattr(h, "baseFilename")][0]
+
+
+def _json_log_entries(path):
+    entries = []
+    for line in open(path):
+        pos = line.find("{")
+        if pos < 0:
+            continue
+        try:
+            entries.append(json.loads(line[pos:]))
+        except Exception:
+            continue
+    return entries
+
+
+def _msgs(entries, message):
+    return [entry["msg"] for entry in entries if entry.get("msg", {}).get("message") == message]
+
+
+class TestSpoolEventContextBuilder:
+    """The context builder supplies id and raw event always, the summary
+    only when a formatted event exists and has a non-empty summary."""
+
+    def _forwarder(self):
+        return _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+        )
+
+    def test_formatted_event_with_summary(self, setup):
+        forwarder = self._forwarder()
+        formatted_event = _formatted_event({"HOSTNAME": "h1"})
+        formatted_event.payload = {"data": 1}
+        formatted_event.summary = "sum: doomed"
+
+        context = forwarder.spool_event_context(3, formatted_event, {"HOSTNAME": "h1"})
+
+        assert context == {
+            'event_id': 3,
+            'raw_event': {'HOSTNAME': 'h1'},
+            'formatted_event': formatted_event,
+            'summary': 'sum: doomed',
+        }
+
+    def test_formatted_event_without_summary(self, setup):
+        forwarder = self._forwarder()
+        formatted_event = _formatted_event({"HOSTNAME": "h1"})
+        formatted_event.payload = {"data": 1}
+        formatted_event.summary = None
+
+        context = forwarder.spool_event_context(5, formatted_event, {"HOSTNAME": "h1"})
+
+        assert 'summary' not in context
+        assert context['formatted_event'] is formatted_event
+        assert context['event_id'] == 5
+        assert context['raw_event'] == {'HOSTNAME': 'h1'}
+
+    def test_without_formatted_event(self, setup):
+        forwarder = self._forwarder()
+
+        context = forwarder.spool_event_context(7, None, {"HOSTNAME": "h1"})
+
+        assert context == {'event_id': 7, 'raw_event': {'HOSTNAME': 'h1'}}
+        assert 'summary' not in context
+        assert 'formatted_event' not in context
+
+
+class TestSpoolLineContent:
+    """The five replay-decision lines and the per-expiry lines carry the
+    id plus the content of the spooled event, in both loggers."""
+
+    TARGETS = ["webhook", "ticketsystem"]  # shipped-module and own-module forwarder paths
+
+    def _forwarder(self, target, logger_type, **opts):
+        if target == "webhook":
+            opts.setdefault("url", "http://example.invalid/api")
+        return _new_forwarder("example", forwarder_name=target, forwarder_opts=opts, logger_type=logger_type)
+
+    def _stored_row(self, forwarder, event_id):
+        return [row for row in forwarder.spool_store.fetch_batch(limit=100) if row[0] == event_id][0]
+
+    # --- the spool-time line (forward failed) ------------------------------
+
+    def test_spool_time_line_carries_id_raw_event_and_summary(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+
+        monkeypatch.setattr(forwarder, "submit", lambda fe: False)
+        raw_event = {"HOSTNAME": "h-spoil", "description": "spool me"}
+        forwarder.forward(dict(raw_event))
+
+        event_id = forwarder.spool_store.max_id()
+        stored_payload = forwarder.spool_store.decode(self._stored_row(forwarder, event_id)[1])
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        spoiled = [msg for msg in _msgs(entries, "forward failed") if msg.get("spooled")]
+        assert len(spoiled) == 1
+        assert spoiled[0]["event_id"] == event_id
+        assert spoiled[0]["raw_event"] == stored_payload
+        assert spoiled[0]["summary"] == "sum: spool me"
+
+    def test_spool_time_line_rendered_text(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "text")
+
+        monkeypatch.setattr(forwarder, "submit", lambda fe: False)
+        raw_event = {"HOSTNAME": "h-spoil", "description": "put me in the spool, sorry"}
+        forwarder.forward(dict(raw_event))
+
+        event_id = forwarder.spool_store.max_id()
+        stored_payload = forwarder.spool_store.decode(self._stored_row(forwarder, event_id)[1])
+
+        log = open(_logfile_path(forwarder)).read()
+        rendered = [line for line in log.splitlines() if "forward failed" in line][-1]
+        assert "WARNING" in rendered
+        assert f"forward failed, spool id {event_id}" in rendered
+        assert "summary <sum: put me in the spool, sorry>" in rendered
+        assert f"raw event <{stored_payload}>" in rendered
+
+    @pytest.mark.parametrize("target", TARGETS)
+    def test_no_move_path_links_spool_and_delete_event_ids(self, setup, monkeypatch, target):
+        forwarder = self._forwarder(target, "json")
+        receiver = {"alive": False}
+
+        def mock_submit(formatted_event):
+            return receiver["alive"]
+
+        monkeypatch.setattr(forwarder, "submit", mock_submit)
+        raw_event = {"HOSTNAME": "h-corr", "description": "correlate with me"}
+        forwarder.forward(dict(raw_event))
+        assert forwarder.num_spooled_events() == 1
+        event_id = forwarder.spool_store.max_id()
+        stored_payload = forwarder.spool_store.decode(self._stored_row(forwarder, event_id)[1])
+
+        receiver["alive"] = True
+        forwarder.flush()
+        assert forwarder.num_spooled_events() == 0
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        spool_msgs = [msg for msg in _msgs(entries, "forward failed") if msg.get("spooled")]
+        delete_msgs = _msgs(entries, "delete spooled event")
+        assert len(spool_msgs) == 1
+        assert len(delete_msgs) == 1
+        assert spool_msgs[0]["event_id"] == delete_msgs[0]["event_id"] == event_id
+        assert spool_msgs[0]["raw_event"] == delete_msgs[0]["raw_event"] == stored_payload
+
+    @pytest.mark.parametrize("target", TARGETS)
+    def test_move_path_survives_via_content_free_bridge(self, setup, monkeypatch, target):
+        forwarder = self._forwarder(target, "json")
+        state = {"rejected_ok": True}
+
+        def mock_submit(formatted_event):
+            if formatted_event.eventopts["description"] == "move me":
+                return not state["rejected_ok"]
+            return True
+
+        monkeypatch.setattr(forwarder, "submit", mock_submit)
+
+        # phase 1: the event is spooled, it carries its raw event in the line
+        raw_event = {"HOSTNAME": "h-move", "description": "move me"}
+        forwarder.forward(dict(raw_event))
+        old_event_id = forwarder.spool_store.max_id()
+        stored_payload = forwarder.spool_store.decode(self._stored_row(forwarder, old_event_id)[1])
+        forwarder.spool_store.enqueue({"HOSTNAME": "h-move", "description": "queued behind"})
+
+        # phase 2: the replay of the spooled event is rejected, but the live
+        # event is accepted, so the spooled event moves behind the others
+        forwarder.forward({"HOSTNAME": "h-move", "description": "live 1"})
+        entries = _json_log_entries(_logfile_path(forwarder))
+        bridges = _msgs(entries, "spooled event moved to the end of the spool")
+        assert len(bridges) == 1
+        bridge = bridges[0]
+        assert bridge["event_id"] == old_event_id
+        new_event_id = bridge["new_event_id"]
+        # the bridge line stays content-free: the ids are the message
+        assert "raw_event" not in bridge
+        assert "summary" not in bridge
+        assert new_event_id == forwarder.spool_store.max_id()
+
+        # phase 3: the receiver now accepts the event, it is replayed and deleted
+        state["rejected_ok"] = False
+        forwarder.flush()
+        assert forwarder.num_spooled_events() == 0
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        delete_msgs = [msg for msg in _msgs(entries, "delete spooled event")
+                       if msg["event_id"] == new_event_id]
+        assert len(delete_msgs) == 1
+        spool_msgs = [msg for msg in _msgs(entries, "forward failed") if msg.get("spooled")]
+        assert delete_msgs[0]["event_id"] == new_event_id
+        assert delete_msgs[0]["raw_event"] == spool_msgs[0]["raw_event"] == stored_payload
+
+    # --- the replay-decision lines -----------------------------------------
+
+    @pytest.mark.parametrize("logger_type", ["text", "json"])
+    @pytest.mark.parametrize("outcome", ["success", "stay", "discard", "format_error"])
+    def test_replay_logs_original_event_after_plugin_mutations(self, setup, monkeypatch, logger_type, outcome):
+        forwarder = self._forwarder("webhook", logger_type)
+        original = {
+            "HOSTNAME": "h-original",
+            "description": "original",
+            "details": {"ticket": "original"},
+            "items": ["original"],
+        }
+        first_id = forwarder.spool_store.enqueue(original)
+        second_id = forwarder.spool_store.enqueue({"description": "later"})
+        submitted = []
+
+        class MutatingFormatter:
+            __module_file__ = "test"
+
+            def format_event(self, event):
+                if event.eventopts["description"] == "later":
+                    event.payload = {"message": "later"}
+                    event.summary = "later"
+                    return
+                event.eventopts["description"] = "formatter changed"
+                event.eventopts["details"]["ticket"] = "formatter changed"
+                event.eventopts["items"].append("formatter added")
+                event.eventopts["non_json"] = object()
+                if outcome == "format_error":
+                    raise ValueError("format failed")
+                event.payload = {"message": "formatted"}
+                event.summary = "formatted"
+                if outcome == "discard":
+                    event.discard()
+
+        def submit(event):
+            submitted.append(event.eventopts["description"])
+            if event.eventopts["description"] != "later":
+                event.eventopts["details"]["ticket"] = "forwarder changed"
+                event.eventopts["items"].append("forwarder added")
+            return outcome != "stay"
+
+        monkeypatch.setattr(forwarder, "new_formatter", MutatingFormatter)
+        monkeypatch.setattr(forwarder, "submit", submit)
+        forwarder.flush()
+
+        messages = {
+            "success": ["delete spooled event"],
+            "stay": ["event stays in spool"],
+            "discard": ["discard spooled event during replay"],
+            "format_error": ["could not format spooled event", "delete trash event"],
+        }[outcome]
+        if logger_type == "json":
+            entries = _json_log_entries(_logfile_path(forwarder))
+            for message in messages:
+                matching = [msg for msg in _msgs(entries, message) if msg["event_id"] == first_id]
+                assert len(matching) == 1
+                assert matching[0]["raw_event"] == original
+        else:
+            with open(_logfile_path(forwarder)) as logfile:
+                lines = logfile.read().splitlines()
+            leads = {
+                "success": [f"delete spooled event {first_id}"],
+                "stay": [f"event {first_id} stays in spool"],
+                "discard": [f"discard spooled event during replay {first_id}"],
+                "format_error": ["could not format spooled", f"delete trash event {first_id}"],
+            }[outcome]
+            for lead in leads:
+                matching = [line for line in lines if lead in line]
+                assert len(matching) == 1
+                assert str(original) in matching[0]
+
+        if outcome == "stay":
+            assert submitted == ["formatter changed"]
+            assert [row[0] for row in forwarder.spool_store.fetch_batch()] == [first_id, second_id]
+        else:
+            assert submitted[-1] == "later"
+            assert forwarder.num_spooled_events() == 0
+
+    def test_delete_spooled_event_line_carries_id_and_content(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+        receiver = {"alive": False}
+
+        def mock_submit(formatted_event):
+            return receiver["alive"]
+
+        monkeypatch.setattr(forwarder, "submit", mock_submit)
+        raw_event = {"HOSTNAME": "h-del", "description": "delete me"}
+        forwarder.forward(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        receiver["alive"] = True
+        forwarder.flush()
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        delete_msgs = _msgs(entries, "delete spooled event")
+        assert len(delete_msgs) == 1
+        assert delete_msgs[0]["event_id"] == event_id
+        assert delete_msgs[0]["raw_event"]["description"] == "delete me"
+        assert delete_msgs[0]["summary"] == "sum: delete me"
+
+    def test_delete_spooled_event_line_rendered_text(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "text")
+        receiver = {"alive": False}
+
+        def mock_submit(formatted_event):
+            return receiver["alive"]
+
+        monkeypatch.setattr(forwarder, "submit", mock_submit)
+        raw_event = {"HOSTNAME": "h-del", "description": "delete me, please"}
+        forwarder.forward(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        stored_payload = forwarder.spool_store.decode(self._stored_row(forwarder, event_id)[1])
+        receiver["alive"] = True
+        forwarder.flush()
+
+        log = open(_logfile_path(forwarder)).read()
+        rendered = [line for line in log.splitlines() if "delete spooled event" in line][-1]
+        assert f"INFO - delete spooled event {event_id}" in rendered
+        assert "summary <sum: delete me, please>" in rendered
+        assert f"raw event <{stored_payload}>" in rendered
+
+    def test_stays_in_spool_line_carries_id_content_and_error(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+        raw_event = {"HOSTNAME": "h-stay", "description": "stay with me"}
+        forwarder.spool_store.enqueue({"HOSTNAME": "h-stay", "description": "stay with me"})
+        event_id = forwarder.spool_store.max_id()
+
+        def mock_submit(formatted_event):
+            raise RuntimeError("receiver down")
+
+        monkeypatch.setattr(forwarder, "submit", mock_submit)
+        forwarder.flush()
+        assert forwarder.num_spooled_events() == 1
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        stays_msgs = _msgs(entries, "event stays in spool")
+        assert len(stays_msgs) == 1
+        assert stays_msgs[0]["event_id"] == event_id
+        assert stays_msgs[0]["raw_event"]["description"] == "stay with me"
+        assert stays_msgs[0]["summary"] == "sum: stay with me"
+        assert stays_msgs[0]["exception"] == "receiver down"
+
+    def test_stays_in_spool_line_rendered_text(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "text")
+        forwarder.spool_store.enqueue({"HOSTNAME": "h-stay", "description": "stay in text"})
+        event_id = forwarder.spool_store.max_id()
+
+        def mock_submit(formatted_event):
+            raise RuntimeError("still down")
+
+        monkeypatch.setattr(forwarder, "submit", mock_submit)
+        forwarder.flush()
+
+        log = open(_logfile_path(forwarder)).read()
+        rendered = [line for line in log.splitlines() if "stays in spool" in line][-1]
+        assert "CRITICAL" in rendered
+        assert f"event {event_id} stays in spool" in rendered
+        assert "summary <sum: stay in text>" in rendered
+        assert "'description': 'stay in text'" in rendered
+        assert "with exception <still down>" in rendered
+
+    def test_discard_during_replay_line_carries_id_summary_and_raw_event(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+
+        def format_doomed(raw):
+            formatted_event = _formatted_event(raw)
+            formatted_event.payload = {"data": "gone"}
+            # a formatter which decides to discard after it named the event
+            formatted_event.summary = "doomed: " + raw["description"]
+            formatted_event.discard(silently=True)
+            return formatted_event
+
+        raw_event = {"HOSTNAME": "h-doom", "description": "discard me"}
+        forwarder.spool_store.enqueue(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        monkeypatch.setattr(forwarder, "format_event", format_doomed)
+        monkeypatch.setattr(forwarder, "submit", lambda fe: pytest.fail("discarded events are not submitted"))
+        forwarder.flush()
+        assert forwarder.num_spooled_events() == 0
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        discard_msgs = _msgs(entries, "discard spooled event during replay")
+        assert len(discard_msgs) == 1
+        assert discard_msgs[0]["event_id"] == event_id
+        assert discard_msgs[0]["raw_event"] == raw_event
+        assert discard_msgs[0]["summary"] == "doomed: discard me"
+
+    def test_discard_during_replay_line_rendered_text(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "text")
+
+        def format_doomed(raw):
+            formatted_event = _formatted_event(raw)
+            formatted_event.payload = {"data": "gone"}
+            formatted_event.summary = "doomed in text"
+            formatted_event.discard(silently=True)
+            return formatted_event
+
+        raw_event = {"HOSTNAME": "h-doom", "description": "text me away"}
+        forwarder.spool_store.enqueue(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        monkeypatch.setattr(forwarder, "format_event", format_doomed)
+        monkeypatch.setattr(forwarder, "submit", lambda fe: pytest.fail("discarded events are not submitted"))
+        forwarder.flush()
+
+        log = open(_logfile_path(forwarder)).read()
+        rendered = [line for line in log.splitlines() if "discard spooled event during replay" in line][-1]
+        assert f"discard spooled event during replay {event_id}" in rendered
+        assert "summary <doomed in text>" in rendered
+        assert "'description': 'text me away'" in rendered
+
+    def test_unformattable_spooled_events_show_raw_event(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+        raw_event = {"HOSTNAME": "h-trash", "description": "poison the formatter"}
+        forwarder.spool_store.enqueue(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        monkeypatch.setattr(forwarder, "format_event", lambda raw: None)
+        forwarder.flush()
+        assert forwarder.num_spooled_events() == 0
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        for message in ["could not format spooled event", "delete trash event"]:
+            msgs = _msgs(entries, message)
+            assert len(msgs) == 1
+            assert msgs[0]["event_id"] == event_id
+            assert msgs[0]["raw_event"] == raw_event
+            assert "summary" not in msgs[0]
+
+    def test_unformattable_spooled_events_rendered_text(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "text")
+        raw_event = {"HOSTNAME": "h-trash", "description": "poison in text"}
+        forwarder.spool_store.enqueue(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        monkeypatch.setattr(forwarder, "format_event", lambda raw: None)
+        forwarder.flush()
+
+        log = open(_logfile_path(forwarder)).read()
+        trash_lines = [line for line in log.splitlines() if "delete trash event" in line]
+        assert f"delete trash event {event_id}" in trash_lines[-1]
+        assert "'description': 'poison in text'" in trash_lines[-1]
+        garbage_lines = [line for line in log.splitlines() if "could not format spooled" in line]
+        assert f"with id {event_id}" in garbage_lines[-1]
+        assert "'description': 'poison in text'" in garbage_lines[-1]
+
+    def test_empty_summary_omits_the_summary_key(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+
+        def format_without_summary(raw):
+            formatted_event = _formatted_event(raw)
+            formatted_event.payload = {"data": "quiet"}
+            # the formatter leaves the summary empty
+            return formatted_event
+
+        raw_event = {"HOSTNAME": "h-quiet", "description": "no summary, please"}
+        forwarder.spool_store.enqueue(dict(raw_event))
+        event_id = forwarder.spool_store.max_id()
+        monkeypatch.setattr(forwarder, "format_event", format_without_summary)
+        monkeypatch.setattr(forwarder, "submit", lambda fe: True)
+        forwarder.flush()
+        assert forwarder.num_spooled_events() == 0
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        delete_msgs = _msgs(entries, "delete spooled event")
+        assert len(delete_msgs) == 1
+        # no summary may be invented: the key is omitted, the raw event
+        # carries the content
+        assert "summary" not in delete_msgs[0]
+        assert delete_msgs[0]["event_id"] == event_id
+        assert delete_msgs[0]["raw_event"] == raw_event
+
+    def test_could_not_format_line_omits_the_summary_key(self, setup, monkeypatch):
+        forwarder = self._forwarder("webhook", "json")
+        raw_event = {"HOSTNAME": "h-broken", "description": "nothing left to summarize"}
+        forwarder.spool_store.enqueue(dict(raw_event))
+        monkeypatch.setattr(forwarder, "format_event", lambda raw: None)
+        forwarder.flush()
+
+        entries = _json_log_entries(_logfile_path(forwarder))
+        for message in ["could not format spooled event", "delete trash event"]:
+            msgs = _msgs(entries, message)
+            assert len(msgs) == 1
+            assert "summary" not in msgs[0]
+            assert "event_summary" not in msgs[0]
+            assert msgs[0]["raw_event"] == raw_event
+
+
+class TestPerEventExpiryLogging:
+    """When the flush prunes expired spool rows, every expired event is
+    named with id and raw event, in addition to the aggregate count line."""
+
+    def _forwarder(self, logger_type):
+        return _new_forwarder(
+            "example",
+            forwarder_name="webhook",
+            forwarder_opts={"url": "http://example.invalid/api"},
+            logger_type=logger_type,
+        )
+
+    def _backdate(self, forwarder, event_id, minutes):
+        forwarder.dbcurs.execute(
+            "UPDATE {table} SET timestamp = datetime('now', '-{minutes} minutes') WHERE id = {event_id}".format(
+                table=forwarder.table_name, minutes=minutes, event_id=event_id))
+        forwarder.dbconn.commit()
+
+    def test_every_expired_event_is_named(self, setup, monkeypatch):
+        forwarder = self._forwarder("json")
+        raw_events = [{"HOSTNAME": "h-exp", "description": "expired %d" % i} for i in range(3)]
+        for raw_event in raw_events:
+            forwarder.spool_store.enqueue(dict(raw_event))
+        expired_rows = forwarder.spool_store.fetch_batch(limit=100)
+        for event_id, _text in expired_rows:
+            self._backdate(forwarder, event_id, 6)
+
+        monkeypatch.setattr(forwarder, "submit", lambda fe: pytest.fail("nothing left to replay"))
+        forwarder.flush()
+
+        expired_msgs = _msgs(_json_log_entries(_logfile_path(forwarder)), "expired spooled event")
+        assert len(expired_msgs) == 3
+        assert sorted(msg["event_id"] for msg in expired_msgs) == sorted(row[0] for row in expired_rows)
+        assert sorted(msg["raw_event"]["description"] for msg in expired_msgs) == sorted(
+            "expired %d" % i for i in range(3))
+        # no summary may be invented for expired entries
+        assert all("summary" not in msg for msg in expired_msgs)
+        count_msgs = _msgs(_json_log_entries(_logfile_path(forwarder)), "dropped outdated events")
+        assert count_msgs[-1]["spooled_count"] == 3
+
+    def test_every_expired_event_rendered_text(self, setup, monkeypatch):
+        forwarder = self._forwarder("text")
+        for i in range(2):
+            event_id = forwarder.spool_store.enqueue({"HOSTNAME": "h-exp", "description": "text expired %d" % i})
+            self._backdate(forwarder, event_id, 6)
+
+        monkeypatch.setattr(forwarder, "submit", lambda fe: pytest.fail("nothing left to replay"))
+        forwarder.flush()
+
+        log = open(_logfile_path(forwarder)).read()
+        expired_lines = [line for line in log.splitlines() if "expired spooled event" in line]
+        assert len(expired_lines) == 2
+        for i in range(2):
+            matching = [line for line in expired_lines if "'description': 'text expired %d'" % i in line]
+            assert len(matching) == 1
+        counts = [line for line in log.splitlines() if "dropped 2 outdated events" in line]
+        assert "dropped 2 outdated events" in counts[-1]
+
+    def test_corrupt_expired_payload_does_not_stop_replay(self, setup, monkeypatch):
+        forwarder = self._forwarder("json")
+        corrupt_id = forwarder.spool_store.enqueue({"HOSTNAME": "h-corrupt", "description": "corrupt me"})
+        alive_id = forwarder.spool_store.enqueue({"HOSTNAME": "h-alive", "description": "replay me"})
+        self._backdate(forwarder, corrupt_id, 6)
+        monkeypatch.setattr(forwarder, "submit", lambda fe: True)
+
+        forwarder.dbcurs.execute(
+            "UPDATE {table} SET payload = 'not json at all {{' WHERE id = {event_id}".format(
+                table=forwarder.table_name, event_id=corrupt_id))
+        forwarder.dbconn.commit()
+
+        forwarder.flush()
+
+        assert forwarder.num_spooled_events() == 0
+        entries = _json_log_entries(_logfile_path(forwarder))
+        undecodable_msgs = _msgs(entries, "expired spool entry could not be decoded")
+        assert len(undecodable_msgs) == 1
+        assert undecodable_msgs[0]["event_id"] == corrupt_id
+        assert undecodable_msgs[0]["payload_text"] == "not json at all {"
+        # the replay of the in-retention row was not skipped
+        delete_msgs = _msgs(entries, "delete spooled event")
+        assert len(delete_msgs) == 1
+        assert delete_msgs[0]["event_id"] == alive_id
+
 
 class _RecordingLogger:
     """Records (level, message, context) of every log call."""
@@ -997,7 +1583,8 @@ class TestFlushStopAndMoveToEnd:
         assert self._spooled(forwarder) == [1, 2, 0]
 
         # a retention of 3 minutes, measured from the original spool time, drops 0
-        assert forwarder.spool_store.prune_expired(3) == 1
+        dropped_rows = forwarder.spool_store.prune_expired(3)
+        assert [event_id for event_id, _payload in dropped_rows] == [4]
         assert self._spooled(forwarder) == [1, 2]
 
 
@@ -1080,7 +1667,9 @@ class TestSpoolStore:
         store.init_db()
 
         event = {"description": "test event"}
-        store.enqueue(event)
+        event_id = store.enqueue(event)
+        store.cursor.execute("SELECT MAX(id) FROM test_events")
+        assert event_id == store.cursor.fetchone()[0]
 
         events = store.fetch_batch()
         assert len(events) == 1
@@ -1164,39 +1753,38 @@ class TestSpoolStore:
 
         store.close()
 
-    def test_prune_expired_boundary(self, setup):
+    def test_prune_expired_boundary(self, setup, monkeypatch):
         """SpoolStore.prune_expired at exact boundary deletes only expired."""
         db_path = os.path.join(OMD_ROOT, "tmp", "test_spool_prune.db")
         store = SpoolStore(db_path, "test_events")
         store.open()
         store.init_db()
 
-        # Enqueue an event
-        store.enqueue({"event": "keep"})
-        events = store.fetch_batch()
-        keep_id = events[0][0]
+        now = 1700000000
+        monkeypatch.setattr("notificationforwarder.spool.time.time", lambda: now)
+        keep_id = store.enqueue({"event": "keep"})
 
         # Manually set its timestamp to exactly max_spool_minutes ago
         # (should NOT be deleted - only strictly older is deleted)
         store.cursor.execute(
-            "UPDATE test_events SET timestamp = datetime('now', '-5 minutes') WHERE id = ?",
-            (keep_id,)
+            "UPDATE test_events SET timestamp = datetime(?, 'unixepoch') WHERE id = ?",
+            (now - 5 * 60, keep_id)
         )
         store.connection.commit()
 
         # Enqueue another and set it to 6 minutes ago (should be deleted)
-        store.enqueue({"event": "delete_me"})
-        events = store.fetch_batch(limit=1)
-        delete_id = events[0][0]
+        delete_id = store.enqueue({"event": "delete_me"})
         store.cursor.execute(
-            "UPDATE test_events SET timestamp = datetime('now', '-6 minutes') WHERE id = ?",
-            (delete_id,)
+            "UPDATE test_events SET timestamp = datetime(?, 'unixepoch') WHERE id = ?",
+            (now - 6 * 60, delete_id)
         )
         store.connection.commit()
 
-        dropped = store.prune_expired(5)
-        assert dropped == 1
-        assert store.count() == 1  # keep_id should remain
+        dropped_rows = store.prune_expired(5)
+        assert [(event_id, store.decode(payload)) for event_id, payload in dropped_rows] \
+            == [(delete_id, {"event": "delete_me"})]
+        assert [(event_id, store.decode(payload)) for event_id, payload in store.fetch_batch()] \
+            == [(keep_id, {"event": "keep"})]
 
         store.close()
 

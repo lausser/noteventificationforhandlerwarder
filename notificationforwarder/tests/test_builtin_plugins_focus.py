@@ -186,7 +186,7 @@ def test_webhook_forward_failure_spools_and_handles_spool_errors(setup, monkeypa
     )
 
     spooled = []
-    monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or True)
+    monkeypatch.setattr(forwarder, "spool", lambda raw_event: spooled.append(raw_event) or (True, 1))
     forwarder.forward({"description": "needs retry"})
     assert spooled and spooled[0]["description"] == "needs retry"
 
@@ -200,7 +200,7 @@ def test_webhook_forward_failure_spools_and_handles_spool_errors(setup, monkeypa
         "post",
         lambda *args, **kwargs: SimpleNamespace(status_code=500, text="nope", reason="bad"),
     )
-    monkeypatch.setattr(forwarder2, "spool", lambda raw_event: False)
+    monkeypatch.setattr(forwarder2, "spool", lambda raw_event: (False, None))
     forwarder2.forward({"description": "cannot persist"})
 
 

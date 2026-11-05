@@ -60,17 +60,18 @@ def test_failed_delivery_is_spooled_and_logged(resilience_setup):
     forwarder.forward({"description": "spool me"})
 
     assert forwarder.num_spooled_events() == 1
+    event_id = forwarder.spool_store.max_id()
     log = open(get_logfile(forwarder)).read()
     assert "CRITICAL - sample api does not accept the payload" in log
-    assert "WARNING - forward failed" in log
-    assert "spooled <sum: spool me>" in log
+    assert f"WARNING - forward failed, spool id {event_id} summary <sum: spool me>" in log
+    assert "raw event <{'description': 'spool me'" in log
     assert "WARNING - spooling queue length is 1" in log
 
 
 def test_unrecoverable_failure_is_logged_when_spooling_fails(resilience_setup, monkeypatch):
     forwarder = new_example_forwarder(fail="1")
 
-    monkeypatch.setattr(forwarder, "spool", lambda raw_event: False)
+    monkeypatch.setattr(forwarder, "spool", lambda raw_event: (False, None))
 
     forwarder.forward({"description": "cannot persist me"})
 

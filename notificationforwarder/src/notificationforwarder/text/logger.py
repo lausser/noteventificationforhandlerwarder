@@ -36,6 +36,24 @@ class TextLogger(NotificationLogger):
         else:
             log_func(full_message)
 
+    def _spool_event_line(self, lead, context):
+        """Render a line which names a spool entry.
+
+        The lead already contains the event id. The summary is appended when
+        the context carries one, the raw event is the payload stored in the
+        spool, and the submit error ends the line when it exists."""
+        description = [lead]
+        if context.get('summary'):
+            description.append(f"summary <{context['summary']}>")
+        if 'raw_event' in context:
+            description.append(f"raw event <{context['raw_event']}>")
+        exception = context.get('exception')
+        if exception:
+            description.append(f"with exception <{exception}>")
+        if 'payload_text' in context:
+            description.append(f"payload <{context['payload_text']}>")
+        return " ".join(description)
+
     def _build_message(self, message, context):
         """
         Build text log message from structured context
@@ -70,6 +88,12 @@ class TextLogger(NotificationLogger):
         if 'raw_event' in context and message.startswith("raw event"):
             parts.append(f"caused error {context.get('exception', 'unknown')}")
 
+        # The spool-time line for a failed delivery which was spooled:
+        # names the spool row id, the stored raw event and the summary
+        if message == "forward failed" and 'event_id' in context and 'raw_event' in context:
+            return self._spool_event_line(
+                f"forward failed, spool id {context['event_id']}", context)
+
         # Add formatter info for formatting errors
         if 'event_data' in context and 'formatter_instance' in context:
             fmt = context['formatter_instance']
@@ -98,10 +122,13 @@ class TextLogger(NotificationLogger):
             return (f"event {context.get('event_id', '')} was rejected while the receiver accepts "
                     f"other events and moved to the end of the spool as {context.get('new_event_id', '')}")
 
-        # Handle spooled count messages
-        if 'spooled_count' in context and 'action' in context:
+        # Handle action-typed spool operations. The counting operations carry
+        # a spooled_count, the per-event lines describe one spooled row each
+        # with id, summary (when one exists) and raw event.
+        if 'action' in context:
             action = context['action']
-            count = context['spooled_count']
+            count = context.get('spooled_count')
+            event_id = context.get('event_id', '')
             if action == 'resend':
                 return f"there are {count} spooled events to be re-sent"
             elif action == 'dropped':
@@ -109,13 +136,23 @@ class TextLogger(NotificationLogger):
             elif action == 'could_not_submit':
                 return f"{count} spooled events could not be submitted"
             elif action == 'delete':
-                return f"delete spooled event {context.get('event_id', '')}"
+                return self._spool_event_line(f"delete spooled event {event_id}", context)
             elif action == 'stays_in_spool':
-                return f"event {context.get('event_id', '')} stays in spool"
+                return self._spool_event_line(f"event {event_id} stays in spool", context)
             elif action == 'delete_trash':
-                return f"delete trash event {context.get('event_id', '')}"
+                return self._spool_event_line(f"delete trash event {event_id}", context)
+            elif action == 'discard_during_replay':
+                return self._spool_event_line(
+                    f"discard spooled event during replay {event_id}", context)
+            elif action == 'expired':
+                return self._spool_event_line(
+                    f"expired spooled event {event_id}", context)
+            elif action == 'expired_undecodable':
+                return (f"expired spool entry {event_id} could not be decoded, "
+                        f"payload <{context.get('payload_text', '')}> with exception <{context.get('exception', '')}>")
             elif action == 'could_not_format':
-                return f"could not format spooled {context.get('raw_event', '')}. sorry, but i will delete this garbage with id {context.get('event_id', '')}"
+                return (f"could not format spooled {context.get('raw_event', '')}. "
+                        f"sorry, but i will delete this garbage with id {event_id}")
 
         # Add queue length warnings
         if 'queue_length' in context:

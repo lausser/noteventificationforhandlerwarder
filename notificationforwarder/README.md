@@ -514,6 +514,12 @@ sqlite3 $OMD_ROOT/var/tmp/notificationforwarder_<forwarder>_notifications.db "SE
 
 `<forwarder>` is the value of `--forwarder`, followed by `_` and the value of `--forwardertag` if one is set (for example `remedy_TEST`).
 
+### Correlating Spool Log Entries
+
+When a failed delivery is spooled, its `forward failed` line identifies the spool row and includes the stored raw event and its summary, if available. During replay, the delete, stays-in-spool, discard, could-not-format and delete-trash lines likewise include the row id and raw event, plus a non-empty summary when one exists. Failed replays also include any submit error. Every expired row gets its own id and raw-event line alongside the aggregate expired count; an undecodable expired row is logged with its id and payload text.
+
+The text logger includes these details in each message, for example `delete spooled event 1 summary <sum: disk full> raw event <{'description': 'disk full'}>`. The JSON logger exposes them in the `msg` object as `event_id`, `raw_event` (the full structured stored event), and `summary` when available. The move-to-end line links the old `event_id` to `new_event_id`; follow that link if an event receives a new spool id before deletion.
+
 ### Delivery Order
 
 Spooled events are stored and re-submitted in the order in which they failed. As long as every delivery succeeds, the receiver gets the events in the order in which they were created. After delivery failures, this is not guaranteed. A newer event can reach the receiver before an older one, for example a RECOVERY before its PROBLEM:

@@ -139,6 +139,18 @@ class JsonLogger(NotificationLogger):
             msg_data["reporter_class"] = rpt.__class__.__name__
             msg_data["reporter_module"] = rpt.__module_file__
 
+        # Add the full decoded raw event as its own structured field, even
+        # when a formatted event is also present. This is the payload as it
+        # was stored in the spool and is not reduced to Naemon keys.
+        if 'raw_event' in context and context['raw_event'] is not None:
+            msg_data["raw_event"] = context['raw_event']
+        # The summary of the spooled event, only present when the formatted
+        # event exists and has a non-empty summary
+        if 'summary' in context and context['summary']:
+            msg_data["summary"] = context['summary']
+        if 'payload_text' in context:
+            msg_data["payload_text"] = context['payload_text']
+
         # Add event data for errors
         if 'event_data' in context:
             msg_data["event_data"] = context['event_data']
