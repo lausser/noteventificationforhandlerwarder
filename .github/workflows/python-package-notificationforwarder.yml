@@ -14,7 +14,7 @@ jobs:
   build-notificationforwarder:
 
     # nicht ubuntu-latest, weil da mindestens py3.6 fehlt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./notificationforwarder
@@ -48,7 +48,7 @@ jobs:
         limit-access-to-actor: true
 
   lint-notificationforwarder:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./notificationforwarder
