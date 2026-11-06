@@ -33,6 +33,17 @@ context: |
     - Keep changes small and backward-compatible when possible.
     - Favor wording that is specific enough for implementation but still easy to understand.
 
+  Confidentiality (MANDATORY):
+    - This repository is PUBLIC and customer-driven. Users share real log
+      data, formatters, forwarders, and reports. Never write real customer
+      data into any artifact (proposal, spec, design, tasks).
+    - Redact BEFORE writing: replace real hostnames/IPs/domains/emails/ticket
+      numbers/keys with fictional or loopback placeholders (e.g. srvblub,
+      127.0.0.1, localhost) first, then write. When in doubt, treat it as
+      confidential and redact it.
+    - A local pre-push hook is a safety net for stray hostnames/IPs; it does
+      not replace redacting first. See openspec/README.md for the full rule.
+
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:
