@@ -6,4 +6,3 @@ sdist
 examples/
 .opencode/
 notificationforwarder/tests/var/
-/openspec/
