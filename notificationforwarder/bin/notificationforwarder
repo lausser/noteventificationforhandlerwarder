@@ -8,6 +8,7 @@ import sys
 #import logging
 from notificationforwarder.util import setup_logging
 from notificationforwarder import baseclass
+from notificationforwarder import spool_dump
 import traceback
 
 
@@ -32,8 +33,9 @@ if __name__ == '__main__':
 This can be any backend you want, provided
 there is a Python module forwarder.py in the folder
 notificationforwarder/<forwarder> somewhere in your PYTHONPATH.
-Examples are victorops, syslog, servicenow, rabbitmq,...''',
-                      default="syslog")
+Examples are victorops, syslog, servicenow, rabbitmq,...
+Defaults to syslog when not in dump mode. Required with --dump-spool.''',
+                      default=argparse.SUPPRESS)
     parser.add_argument('--forwardertag', '--receivertag', action='store',
                       dest="forwardertag",
                       help='A distinctive string which is added to the logfile',
@@ -77,12 +79,56 @@ Example for an HTTP-based reporter:
                       dest="logger",
                       help='Logger type: text (default) or json, or custom logger module',
                       default='text')
+    parser.add_argument('--dump-spool', action='store_true',
+                      dest="dump_spool",
+                      help='''Dump the spooled events of the selected forwarder instance and exit.
+The spool is read only: nothing is forwarded, retried, or modified.
+--forwarder is required in this mode; --forwardertag selects the tagged instance.''',
+                      default=False)
+    parser.add_argument('--order', action='store',
+                      dest="order",
+                      choices=("oldest", "newest"),
+                      help='Spool dump order: oldest (default) or newest',
+                      default="oldest")
+    parser.add_argument('--limit', action='store',
+                      dest="limit",
+                      help='Spool dump: maximum number of records to display (default: all)',
+                      default=None)
+    parser.add_argument('--dump-format', action='store',
+                      dest="dump_format",
+                      choices=("text", "json"),
+                      help='Spool dump output format: text (default) or json',
+                      default="text")
     parser.add_argument('--version', action='version',
                       version=f'%(prog)s VERSION')
 
     args = parser.parse_args()
+    if not hasattr(args, 'forwarder'):
+        # The default applies only outside dump mode; dump mode needs the
+        # instance named explicitly because the spool is one file per
+        # (forwarder, tag) pair.
+        if args.dump_spool:
+            parser.error("--dump-spool requires --forwarder (or --receiver)")
+        args.forwarder = "syslog"
     if not hasattr(args, 'formatter'):
         args.formatter = args.forwarder
+
+    if args.dump_spool:
+        try:
+            limit = int(args.limit) if args.limit is not None else None
+        except ValueError:
+            # one usage line naming the value, like the core's validation
+            print("error: --limit must be an integer, got '{}'".format(args.limit),
+                  file=sys.stderr)
+            sys.exit(2)
+        status = spool_dump.dump_spool(
+            args.forwarder,
+            args.forwardertag,
+            args.order,
+            limit,
+            args.dump_format,
+        )
+        sys.exit(status)
 
     try:
         forwarder = baseclass.new(args.forwarder, args.forwardertag, args.formatter, args.verbose, args.debug, args.forwarderopt, args.reporter, args.reporteropt, args.logger)
