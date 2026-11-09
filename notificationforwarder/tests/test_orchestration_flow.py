@@ -255,7 +255,7 @@ class TestRuntimeFoundationExtended:
 
         class MockLogger:
             def critical(self, msg, *args, **kwargs):
-                critical_calls.append(msg)
+                critical_calls.append((msg, args, kwargs))
             def info(self, msg, *args, **kwargs):
                 pass
             def warning(self, msg, *args, **kwargs):
@@ -270,6 +270,16 @@ class TestRuntimeFoundationExtended:
             if hasattr(forwarder, "forward_multiple"):
                 forwarder.forward_multiple(event)
                 assert len(submit_calls) == 0
-                assert any("split" in str(c).lower() for c in critical_calls)
+                assert any("split" in str(c[0]).lower() for c in critical_calls)
+                # the exception must reach the log context, so the rendered
+                # line carries it (text logger appends "with exception <...>")
+                contexts = [
+                    args[0] for _, args, _ in critical_calls
+                    if args and isinstance(args[0], dict)
+                ]
+                assert any(
+                    isinstance(ctx.get('exception'), RuntimeError)
+                    for ctx in contexts
+                )
         finally:
             baseclass.logger = original_logger

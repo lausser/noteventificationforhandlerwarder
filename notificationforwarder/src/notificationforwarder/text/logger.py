@@ -115,7 +115,11 @@ class TextLogger(NotificationLogger):
 
         # Handle split events error
         if 'split_error' in context and 'raw_event' in context:
-            return f"error split_events failed for {context['raw_event']}"
+            message = f"error split_events failed for {context['raw_event']}"
+            exception = context.get('exception')
+            if exception:
+                message += f" with exception <{exception}>"
+            return message
 
         # Handle a rejected spooled event which was moved behind the others
         if context.get('action') == 'moved_to_end':

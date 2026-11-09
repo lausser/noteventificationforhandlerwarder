@@ -94,6 +94,34 @@ class TestTextLogger(unittest.TestCase):
             'spooled': True
         })
 
+    def test_split_events_error_renders_raw_event_and_exception(self):
+        """split_events failure keeps the copy-pasteable raw event dict
+        and appends the exception (issue: formatter crashed inside
+        split_events and the critical log line showed no exception)."""
+        raw_event = {
+            'HOSTNAME': 'dewh025l',
+            'SERVICEDESC': 'Is there enough free space in the tablespaces',
+            'SERVICESTATE': 'CRITICAL',
+        }
+        exc = TypeError('sequence item 0: expected str instance, dict found')
+        message = self.logger._build_message("split_events failed", {
+            'raw_event': raw_event,
+            'split_error': True,
+            'exception': exc,
+        })
+        self.assertTrue(message.startswith("error split_events failed for {"))
+        self.assertIn("'HOSTNAME': 'dewh025l'", message)
+        self.assertTrue(message.endswith(
+            "with exception <sequence item 0: expected str instance, dict found>"))
+
+    def test_split_events_error_without_exception(self):
+        """Without an exception the line stays in the historic format."""
+        message = self.logger._build_message("split_events failed", {
+            'raw_event': {'HOSTNAME': 'h1'},
+            'split_error': True,
+        })
+        self.assertEqual(message, "error split_events failed for {'HOSTNAME': 'h1'}")
+
 
 class TestJsonLogger(unittest.TestCase):
     """Test JsonLogger functionality"""

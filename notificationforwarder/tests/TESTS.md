@@ -125,7 +125,7 @@ Integration tests for `load_forwarder()` using the `pythonpath/lib/python` test 
 | Test | What it verifies | Intention |
 |------|------------------|-----------|
 | `test_forwarder_forwarder_split_events` | `forward_multiple()` with 2 splits → 2 submits | Each split event is processed independently. |
-| `test_forward_split_events_exception_no_delivery` | `split_events()` raising `RuntimeError` → 0 submits, critical log | An exception in split aborts the whole batch; no partial delivery. |
+| `test_forward_split_events_exception_no_delivery` | `split_events()` raising `RuntimeError` → 0 submits, critical log with the exception in context | An exception in split aborts the whole batch; no partial delivery. |
 
 ---
 
@@ -654,6 +654,8 @@ Smoke tests for every logging call path in `baseclass.py`. Each test calls a spe
 | `test_message_with_exception` | TextLogger logs with exception context | Exception context is handled. |
 | `test_message_with_formatted_event` | TextLogger logs with `FormattedEvent` context | Event context is rendered. |
 | `test_message_with_spooled_event` | TextLogger logs with exception + `FormattedEvent` + `spooled=True` | Combined context works. |
+| `test_split_events_error_renders_raw_event_and_exception` | `split_events failed` line keeps the copy-pasteable raw event dict and appends `with exception <...>` | The exception behind a split failure is visible in the log (issue: a formatter crash in `split_events` left no clue in the critical line). |
+| `test_split_events_error_without_exception` | `split_events failed` without exception renders the historic format | Backward compatible line when no exception context exists. |
 
 ### class TestJsonLogger
 
